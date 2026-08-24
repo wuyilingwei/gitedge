@@ -1,0 +1,44 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gitedge-git",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "limits": { "cpu_ms": 300000 },
+  "durable_objects": {
+    "bindings": [
+      { "name": "REPO_DO", "class_name": "RepoDurableObject" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RepoDurableObject"] }
+  ],
+  "kv_namespaces": [
+    { "binding": "ROUTES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gitedge",
+      "database_id": "REPLACE_WITH_SHARED_D1_DATABASE_ID",
+      "migrations_dir": "../../migrations"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "REPO_BUCKET", "bucket_name": "gitedge-git-repos" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "REPO_TASKS_QUEUE", "queue": "gitedge-git-repo-maint" }
+    ],
+    "consumers": [
+      { "queue": "gitedge-git-repo-maint", "max_batch_size": 1, "max_batch_timeout": 1 }
+    ]
+  },
+  "observability": { "enabled": true },
+  "vars": {
+    "REPO_DO_IDLE_MINUTES": "30",
+    "LOG_LEVEL": "info"
+  }
+}

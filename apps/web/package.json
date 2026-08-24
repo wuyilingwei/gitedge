@@ -1,0 +1,25 @@
+{
+  "name": "gitedge-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "vue": "^3.5.41",
+    "vue-i18n": "^11.4.9",
+    "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.3.11"
+  }
+}
