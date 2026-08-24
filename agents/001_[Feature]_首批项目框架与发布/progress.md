@@ -15,3 +15,4 @@
 - 本地四 Worker 连接成功；浏览器完成登录、仓库、Issue、PR、Wiki、中英文切换、退出与匿名访问保护流程。
 - 修复仓库创建后的 KV 路由同步；Git v2 discovery 返回 200，`git ls-remote` 对空仓库成功。
 - 最终集成验证当前为根单元测试 68/68、前端测试 6/6、Workers 测试 320/320、四 Worker dry-run、typecheck 和 Vue production build 通过。
+- GitHub `main` 无保护规则；补全浅克隆上游对象后，将本地任务分支合并到 `main` 并成功推送 `wuyilingwei/gitedge`。
