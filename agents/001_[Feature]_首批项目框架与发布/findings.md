@@ -9,6 +9,7 @@
 ## 上游与产品边界
 
 - [`zllovesuki/git-on-cloudflare` 为 MIT 且已实现 Git Smart HTTP v2 核心] -> [对比从零实现 pkt-line、pack、push 并发风险] -> [固定上游提交并复用 Git transport/storage 核心，Vue 与 Forge 层独立演进]
+- [目标 GitHub 仓库已有 ALE 1.1 + GPL-3.0 根许可证，上游为 MIT] -> [核对两段现有许可证与目标仓库历史] -> [保留目标仓库根许可证，并把上游 MIT 声明独立保存于 `LICENSES/MIT-git-on-cloudflare.txt`]
 - [成熟 Forge 的仓库级信息架构高度一致] -> [比较 GitHub/GitLab/Gitea/Forgejo] -> [首批仓库导航固定为 Code / Issues / Pull Requests / Wiki]
 - [Wiki 若首批直接实现独立 Git 仓库会扩大协议与权限面] -> [比较 D1 版本化正文方案] -> [首批用 `wiki_pages` + `wiki_revisions`，附件走 R2]
 
