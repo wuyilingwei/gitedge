@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { api, type Repository } from "../lib/api";
 import StatusState from "../components/StatusState.vue";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const repos = ref<Repository[]>([]);
 const loading = ref(true);
 const error = ref("");
@@ -12,6 +12,10 @@ const showForm = ref(false);
 const saving = ref(false);
 const formError = ref("");
 const form = ref({ name: "", description: "", visibility: "private" as "public" | "private" });
+
+function formatUpdatedAt(value: number): string {
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: "medium" }).format(value);
+}
 
 async function load() {
   loading.value = true;
@@ -97,7 +101,7 @@ onMounted(load);
         </div>
         <div class="repo-meta">
           <code>{{ repo.defaultBranch }}</code
-          ><span>{{ repo.updatedAt }}</span
+          ><span>{{ formatUpdatedAt(repo.updatedAt) }}</span
           ><span class="arrow">→</span>
         </div>
       </RouterLink>

@@ -1,61 +1,34 @@
-# Impeccable Design Context
+# GitEdge / 码锋产品约束
 
-## Design Context
+## 产品定位
 
-### Users
+码锋是面向个人开发者和小团队的边缘 Git Forge。首批目标不是复刻大型代码托管平台，而是让授权、仓库、Git transport、Issue、Pull Request 和 Wiki 形成一个可信的最小端到端产品。
 
-Solo developers (and occasionally small teams) who self-host Git repositories on Cloudflare Workers. These are infrastructure-minded people who chose to run their own git forge on edge compute rather than use a hosted service. They interact primarily via `git clone`/`git push` in the terminal; the web UI is for browsing trees, blobs, commits, and managing auth. They value that this thing actually works — 80,000+ objects on a Workers runtime is the flex, not the marketing page.
+## 品牌与语言
 
-### Brand Personality
+- 英文名称：GitEdge
+- 中文名称：码锋
+- 界面默认简体中文，并提供英文切换。
+- 气质：精确、克制、偏工具化；技术事实优先于营销文案。
 
-**Precise, opinionated, utilitarian.**
+## 前端
 
-This is a tool that does one thing well and knows it. The interface should feel like well-machined infrastructure: reliable, solid, no wasted motion. But not cold — there's a quiet confidence and a subtle edge of personality underneath the utility. The feeling is closer to a well-built CLI tool that happens to have a web face than it is to a SaaS product trying to convert you.
+- Vue 3、TypeScript、Vite、Vue Router、Vue I18n。
+- 深色界面优先，保留明确的键盘焦点、错误、加载和空状态。
+- 不用演示数据掩盖 API 故障；页面只呈现真实服务数据。
+- 仓库一级导航固定为 Code、Issues、Pull Requests、Wiki。
 
-**Emotional targets:**
+## 服务边界
 
-- "This is solid code" — trustworthy, reliable, engineered
-- "This gets out of my way" — minimal, focused, no noise
-- "This has taste" — opinionated choices, not default everything
+- Gateway 是唯一公开 Worker，负责静态资源、路由和可信身份转换。
+- Auth、Forge、Git 关闭 `workers.dev` 与公开 route，只允许 Service Binding 访问。
+- Auth 拥有凭证与会话；Forge 拥有协作元数据；Git 拥有协议、refs 与对象存储。
+- D1 是用户、namespace、仓库和协作元数据的事实来源；KV 只作为 Git 路由候选缓存，不能独立授权。
 
-### Aesthetic Direction
+## 首批明确边界
 
-**Tone:** Sharp minimalism with deliberate warmth. The intersection of jam.dev's confident knife-edge precision and charm.land's personality-injected developer tools. Not sterile, not playful — _precise with character_.
-
-**References:**
-
-- **jam.dev** — The sharp knife. Clean whitespace, modular layouts, confident typography, developer-focused without being enterprise. What works: the generous spacing, the way product context is shown rather than described, the confidence in leaving things simple.
-- **charm.land** — The sugar high. Personality through naming, illustration, and tone rather than through visual noise. What works: the proof that developer tools can have warmth and identity without becoming whimsical or losing credibility.
-
-**Anti-references:**
-
-- Not another SaaS dashboard (no onboarding funnels, no pricing tiers, no "get started free" hero)
-- Not GitHub's dense enterprise UI (information density for density's sake)
-- Not Vercel's marketing gloss (style over substance)
-- Not generic admin templates (card grids with icons and shadows)
-
-**Theme:** Dark-primary with light mode toggle. Dark mode is the default and the design target — developers browsing repos late in the terminal-adjacent context. Light mode is a courtesy, not the hero.
-
-**Color:** Indigo accent palette (`#6366f1` base), can shift slightly within the indigo family. Zinc neutrals with brand-tinted undertones. Lifted canvas (`#221f21`) for comfortable reading. Accent used sparingly — its power comes from rarity.
-
-**Typography:** Hanken Grotesk (body), IBM Plex Serif (display/editorial), JetBrains Mono (code). These are committed choices. The serif display font is the personality injection — it signals "this was chosen, not defaulted."
-
-**Constraints:**
-
-- Part of devbin.tools ecosystem — shared shell conventions per frontend-spec.md
-- SSR + islands architecture — no SPA patterns, minimal client JS
-- Tailwind v4 CSS-native config, no CSS-in-JS
-- Performance-sensitive: no heavy background effects, respect `prefers-reduced-motion`
-- Accessibility: lifted canvas for astigmatism, font-weight 450, WCAG AA minimum
-
-### Design Principles
-
-1. **Utility over decoration.** Every visual element must earn its place by improving comprehension, navigation, or feedback. If removing something changes nothing, remove it.
-
-2. **Precision is the personality.** The brand character comes through in _how well things are done_, not through added flair. Tight spacing, considered typography, and consistent details are the design language — not illustrations, gradients, or effects.
-
-3. **Show the infrastructure.** This product's identity is that it runs Git on edge compute. Let the technical context show through: monospace where it matters, terminal-flavored moments, the code as the hero rather than marketing copy about the code.
-
-4. **Confident restraint.** Make strong choices and leave space around them. One accent color used with intent beats five used for variety. Large type with nothing beside it beats a dense layout. Silence is a design decision.
-
-5. **Dark mode is home.** Design for the dark canvas first. The zinc surfaces, the indigo accent, the serif display weight — these are calibrated for dark backgrounds. Light mode follows, adapted thoughtfully, but dark is where the design lives.
+- Issue 支持创建、列表和状态更新 API。
+- Pull Request 支持创建、列表和状态更新 API，但不声称已有 diff 或 merge。
+- Wiki 使用 D1 保存正文与 revision，不建立第二套 Git 仓库。
+- Git Smart HTTP v2 核心保留；公开 fetch 路径可用，push 需要后续接通 PAT 签发与管理界面。
+- CI、组织级权限、SSH、代码评审线程和通知不在首批范围。

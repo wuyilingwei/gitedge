@@ -23,7 +23,7 @@ Auth 的 `/session` 成功响应契约为 `{ "data": { "id": "...", "identifier"
 
 ## 本地
 
-`bash scripts/dev-stack.sh` 会启动 Auth、Forge、Git 和 Gateway 四个 `wrangler dev` 进程。脚本要求三个内部 Worker 配置已经存在，并通过 `GITEDGE_GATEWAY_PORT` 调整 Gateway 端口。
+`bash scripts/dev-stack.sh` 会启动 Auth、Forge、Git 和 Gateway 四个 `wrangler dev` 进程，Gateway 默认监听 `8877`。脚本要求三个内部 Worker 配置已经存在，并可通过 `GITEDGE_GATEWAY_PORT` 调整 Gateway 端口。
 
 ## 安全约束
 

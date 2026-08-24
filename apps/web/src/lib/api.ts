@@ -10,7 +10,7 @@ export interface Repository {
   description?: string;
   visibility: "public" | "private";
   defaultBranch: string;
-  updatedAt: string;
+  updatedAt: number;
 }
 
 export interface Issue {
@@ -19,7 +19,7 @@ export interface Issue {
   body?: string;
   state: "open" | "closed";
   author: string;
-  updatedAt: string;
+  updatedAt: number;
 }
 
 export interface PullRequest {
@@ -28,17 +28,18 @@ export interface PullRequest {
   body?: string;
   state: "open" | "closed" | "merged";
   author: string;
-  head: string;
-  base: string;
-  updatedAt: string;
+  headRef: string;
+  baseRef: string;
+  updatedAt: number;
 }
 
 export interface WikiPage {
   slug: string;
   title: string;
-  excerpt: string;
-  body?: string;
-  updatedAt: string;
+  content?: string;
+  revision: number;
+  updatedBy: string;
+  updatedAt: number;
 }
 
 export class ApiError extends Error {
@@ -89,7 +90,11 @@ export const api = {
   }) =>
     request<Repository>("/api/forge/repositories", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        slug: payload.name,
+        description: payload.description,
+        visibility: payload.visibility,
+      }),
     }),
   issues: (repositoryId: string) =>
     request<Issue[]>(`/api/forge/repositories/${repositoryId}/issues`),
@@ -106,18 +111,34 @@ export const api = {
   ) =>
     request<PullRequest>(`/api/forge/repositories/${repositoryId}/pull-requests`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        title: payload.title,
+        body: payload.body,
+        headRef: payload.head,
+        baseRef: payload.base,
+      }),
     }),
   wiki: (repositoryId: string) =>
     request<WikiPage[]>(`/api/forge/repositories/${repositoryId}/wiki`),
   createWikiPage: (repositoryId: string, payload: { slug: string; title: string; body: string }) =>
-    request<WikiPage>(`/api/forge/repositories/${repositoryId}/wiki`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-  updateWikiPage: (repositoryId: string, slug: string, payload: { title: string; body: string }) =>
-    request<WikiPage>(`/api/forge/repositories/${repositoryId}/wiki/${slug}`, {
+    request<WikiPage>(
+      `/api/forge/repositories/${repositoryId}/wiki/${encodeURIComponent(payload.slug)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ title: payload.title, content: payload.body }),
+      }
+    ),
+  updateWikiPage: (
+    repositoryId: string,
+    slug: string,
+    payload: { title: string; body: string; expectedRevision?: number }
+  ) =>
+    request<WikiPage>(`/api/forge/repositories/${repositoryId}/wiki/${encodeURIComponent(slug)}`, {
       method: "PUT",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        title: payload.title,
+        content: payload.body,
+        expectedRevision: payload.expectedRevision,
+      }),
     }),
 };

@@ -1,6 +1,6 @@
 ---
 description: Always Load
-applyTo: '**'
+applyTo: "**"
 ---
 
 # GitEdge 项目指令

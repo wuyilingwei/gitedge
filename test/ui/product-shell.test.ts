@@ -8,13 +8,11 @@ describe("GitEdge API client", () => {
   });
 
   it("unwraps the auth response envelope and sends the service payload", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(JSON.stringify({ data: { id: "u1", identifier: "rosmontis" } }), {
-          status: 200,
-        })
-      );
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "u1", identifier: "rosmontis" } }), {
+        status: 200,
+      })
+    );
 
     const user = await api.login({ identifier: "rosmontis", password: "a".repeat(12) });
 
@@ -38,6 +36,57 @@ describe("GitEdge API client", () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "/api/forge/repositories/repo-7/issues",
       expect.objectContaining({ credentials: "include" })
+    );
+  });
+
+  it("translates UI fields into the Forge repository contract", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "repo-7" } }), { status: 201 })
+    );
+
+    await api.createRepository({ name: "edge", description: "At the edge", visibility: "public" });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/forge/repositories",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ slug: "edge", description: "At the edge", visibility: "public" }),
+      })
+    );
+  });
+
+  it("uses Forge field names and a slug-addressed wiki endpoint", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response(JSON.stringify({ data: {} }), { status: 201 }));
+
+    await api.createPullRequest("repo-7", {
+      title: "Ship it",
+      body: "Ready",
+      head: "feature",
+      base: "main",
+    });
+    await api.createWikiPage("repo-7", { slug: "home", title: "Home", body: "Welcome" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/forge/repositories/repo-7/pull-requests",
+      expect.objectContaining({
+        body: JSON.stringify({
+          title: "Ship it",
+          body: "Ready",
+          headRef: "feature",
+          baseRef: "main",
+        }),
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/forge/repositories/repo-7/wiki/home",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ title: "Home", content: "Welcome" }),
+      })
     );
   });
 

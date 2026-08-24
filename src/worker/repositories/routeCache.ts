@@ -1,22 +1,20 @@
 import { createLogger } from "@/worker/common";
-import { z } from "zod";
+import {
+  RepositoryRouteCacheRecordSchema,
+  repositoryRouteCacheKey,
+  type RepositoryRouteCacheRecord,
+} from "../../../packages/contracts/src/index";
 
 // Workers KV `ROUTES` candidate cache. Backfill and repo-mutation flows
 // write here; the resolver reads here as a hint and re-confirms against
 // D1. The payload deliberately omits `visibility` because KV is
 // eventually consistent and must not be an authorization source.
 
-export const RouteCacheRecordSchema = z.object({
-  repositoryId: z.string(),
-  namespaceId: z.string(),
-  doName: z.string(),
-  updatedAt: z.number(),
-});
-
-export type RouteCacheRecord = z.infer<typeof RouteCacheRecordSchema>;
+export const RouteCacheRecordSchema = RepositoryRouteCacheRecordSchema;
+export type RouteCacheRecord = RepositoryRouteCacheRecord;
 
 export function routeCacheKey(namespaceSlug: string, repoSlug: string): string {
-  return `repo-route:v1:${namespaceSlug}/${repoSlug}`;
+  return repositoryRouteCacheKey(namespaceSlug, repoSlug);
 }
 
 // Writes/deletes log only on success. Failures throw to the caller so

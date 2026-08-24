@@ -103,7 +103,6 @@ watch(() => [route.params.owner, route.params.repo, route.params.section], load,
         <h1>{{ repoName }}</h1>
         <p class="muted">{{ repository?.description || t("noDescription") }}</p>
       </div>
-      <button class="button ghost">{{ t("settings") }}</button>
     </div>
     <nav class="repo-tabs">
       <RouterLink :class="{ active: section === 'code' }" :to="`/${owner}/${repoName}`">{{
@@ -167,7 +166,10 @@ watch(() => [route.params.owner, route.params.repo, route.params.section], load,
         ><div class="code-toolbar">
           <code>{{ repository?.defaultBranch || "main" }}</code
           ><span
-            >{{ t("cloneUrl") }}: <code>{{ `/api/git/${repository?.id || ""}.git` }}</code></span
+            >{{ t("cloneUrl") }}:
+            <code>{{
+              `/${repository?.owner || owner}/${repository?.name || repoName}.git`
+            }}</code></span
           >
         </div>
         <div class="state">
@@ -189,13 +191,13 @@ watch(() => [route.params.owner, route.params.repo, route.params.section], load,
           <span class="number">#{{ pull.number }}</span
           ><strong>{{ pull.title }}</strong
           ><span class="badge open">{{ pull.state }}</span
-          ><small>{{ pull.head }} → {{ pull.base }}</small>
+          ><small>{{ pull.headRef }} → {{ pull.baseRef }}</small>
         </div>
         <div v-if="!pulls.length" class="state">{{ t("empty") }}</div></template
       ><template v-else-if="!loading && !error && section === 'wiki'"
         ><div v-for="page in wiki" :key="page.slug" class="item-row">
           <span class="wiki-mark">W</span><strong>{{ page.title }}</strong
-          ><small>{{ page.excerpt }}</small>
+          ><small>r{{ page.revision }}</small>
         </div>
         <div v-if="!wiki.length" class="state">{{ t("empty") }}</div></template
       >

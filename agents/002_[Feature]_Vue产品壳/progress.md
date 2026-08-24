@@ -14,3 +14,4 @@
 - 增加仓库、Issue、Pull Request、Wiki 创建表单及 POST 操作，成功后刷新列表；Code 页展示真实 clone URL 与 Git transport 空仓状态。
 - 增加 fetch mock 测试覆盖响应解包、API 路径及 401 错误；Prettier 格式化完成。
 - 补强验证：`npm run build` 通过；`npm test` 通过，4 tests。
+- 主分支集成修正 Forge payload 与 Wiki 路径，更新 Vue 生态依赖；最终前端测试 6/6、production build 通过，并完成真实浏览器全流程验证。

@@ -22,6 +22,19 @@ export type ServiceResult<T> =
 
 export type TrustedUser = { readonly id: string; readonly identifier: string };
 
+export const RepositoryRouteCacheRecordSchema = z.object({
+  repositoryId: z.string(),
+  namespaceId: z.string(),
+  doName: z.string(),
+  updatedAt: z.number(),
+});
+
+export type RepositoryRouteCacheRecord = z.infer<typeof RepositoryRouteCacheRecordSchema>;
+
+export function repositoryRouteCacheKey(namespaceSlug: string, repositorySlug: string): string {
+  return `repo-route:v1:${namespaceSlug}/${repositorySlug}`;
+}
+
 export const RegisterInputSchema = z.object({
   identifier: z.string().trim().min(3).max(64),
   password: z.string().min(12).max(256),
@@ -30,7 +43,11 @@ export const RegisterInputSchema = z.object({
 export const LoginInputSchema = RegisterInputSchema;
 
 export const CreateRepositoryInputSchema = z.object({
-  slug: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{0,62}$/),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9][a-z0-9-]{0,62}$/),
   visibility: z.enum(["public", "private"]),
   description: z.string().trim().max(500).default(""),
 });
@@ -40,11 +57,13 @@ export const CreateIssueInputSchema = z.object({
   body: z.string().max(50_000).default(""),
 });
 
-export const UpdateIssueInputSchema = z.object({
-  title: z.string().trim().min(1).max(200).optional(),
-  body: z.string().max(50_000).optional(),
-  state: z.enum(["open", "closed"]).optional(),
-}).refine((value) => Object.keys(value).length > 0);
+export const UpdateIssueInputSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    body: z.string().max(50_000).optional(),
+    state: z.enum(["open", "closed"]).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0);
 
 export const CreatePullRequestInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -53,11 +72,13 @@ export const CreatePullRequestInputSchema = z.object({
   headRef: z.string().trim().min(1).max(255),
 });
 
-export const UpdatePullRequestInputSchema = z.object({
-  title: z.string().trim().min(1).max(200).optional(),
-  body: z.string().max(50_000).optional(),
-  state: z.enum(["open", "closed"]).optional(),
-}).refine((value) => Object.keys(value).length > 0);
+export const UpdatePullRequestInputSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    body: z.string().max(50_000).optional(),
+    state: z.enum(["open", "closed"]).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0);
 
 export const PutWikiPageInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
