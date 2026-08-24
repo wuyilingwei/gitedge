@@ -1,8 +1,8 @@
 import type { Viewer } from "@/client/server/viewer";
 import { newPrefixedId } from "@/worker/common";
 import { findUserById, listNamespacesForUser } from "@/worker/db/d1/dal";
-import type { UserRow } from "@/worker/db/d1/schema";
 import type { AppContext } from "@/worker/routes/hono";
+import type { ActiveSession, SessionPayload } from "./sessionTypes";
 import { z } from "zod";
 
 import { clearSessionCookie, getSessionCookie, setSessionCookie } from "./cookies";
@@ -18,20 +18,15 @@ const SESSION_VERSION = 1;
 const AES_GCM_IV_LENGTH = 12;
 const AES_KEY_BIT_LENGTH = 256;
 
-const SessionPayloadSchema = z.object({
+const SessionPayloadSchema: z.ZodType<SessionPayload> = z.object({
   version: z.literal(SESSION_VERSION),
   userId: z.string(),
   createdAt: z.number(),
   expiresAt: z.number(),
 });
 
-type SessionPayload = z.infer<typeof SessionPayloadSchema>;
-
-export type ActiveSession = { user: UserRow; payload: SessionPayload };
-
 export type SessionConfigResult =
-  | { ok: true; secret: string }
-  | { ok: false; reason: "missing_session_secret" };
+  { ok: true; secret: string } | { ok: false; reason: "missing_session_secret" };
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();

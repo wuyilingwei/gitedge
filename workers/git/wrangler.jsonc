@@ -3,7 +3,7 @@
   "name": "gitedge-git",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-24",
-  "compatibility_flags": ["nodejs_als"],
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "limits": { "cpu_ms": 300000 },
   "durable_objects": {
@@ -12,9 +12,7 @@
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["RepoDurableObject"] },
-    { "tag": "v2", "new_sqlite_classes": ["AuthDurableObject"] },
-    { "tag": "v3", "deleted_classes": ["AuthDurableObject"] }
+    { "tag": "v1", "new_sqlite_classes": ["RepoDurableObject"] }
   ],
   "kv_namespaces": [
     { "binding": "ROUTES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
@@ -22,9 +20,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "gitedge-git",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
-      "migrations_dir": "../../drizzle/d1"
+      "database_name": "gitedge",
+      "database_id": "REPLACE_WITH_SHARED_D1_DATABASE_ID",
+      "migrations_dir": "../../migrations"
     }
   ],
   "r2_buckets": [
@@ -41,7 +39,6 @@
   "observability": { "enabled": true },
   "vars": {
     "REPO_DO_IDLE_MINUTES": "30",
-    "LOG_LEVEL": "info",
-    "TESSERA_OIDC_ISSUER": "https://auth.example.invalid"
+    "LOG_LEVEL": "info"
   }
 }

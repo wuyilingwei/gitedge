@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS namespace_memberships (
   FOREIGN KEY (namespace_id) REFERENCES namespaces(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_namespace_memberships_user_ns
+  ON namespace_memberships(user_id, namespace_id);
 
 CREATE TABLE IF NOT EXISTS repositories (
   id TEXT PRIMARY KEY NOT NULL,
@@ -47,6 +49,44 @@ CREATE TABLE IF NOT EXISTS repositories (
   FOREIGN KEY (namespace_id) REFERENCES namespaces(id) ON DELETE CASCADE,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 );
+CREATE INDEX IF NOT EXISTS idx_repositories_namespace_updated
+  ON repositories(namespace_id, updated_at DESC, slug);
+
+CREATE TABLE IF NOT EXISTS personal_access_tokens (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  prefix TEXT NOT NULL UNIQUE,
+  hash TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  revoked_at INTEGER,
+  last_used_at INTEGER,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pats_user_created
+  ON personal_access_tokens(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS pat_namespace_grants (
+  pat_id TEXT NOT NULL,
+  namespace_id TEXT NOT NULL,
+  level TEXT NOT NULL CHECK (level IN ('pull', 'push')),
+  PRIMARY KEY(pat_id, namespace_id),
+  FOREIGN KEY (pat_id) REFERENCES personal_access_tokens(id) ON DELETE CASCADE,
+  FOREIGN KEY (namespace_id) REFERENCES namespaces(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pat_namespace_grants_namespace
+  ON pat_namespace_grants(namespace_id);
+
+CREATE TABLE IF NOT EXISTS pat_repo_grants (
+  pat_id TEXT NOT NULL,
+  repo_id TEXT NOT NULL,
+  level TEXT NOT NULL CHECK (level IN ('pull', 'push')),
+  PRIMARY KEY(pat_id, repo_id),
+  FOREIGN KEY (pat_id) REFERENCES personal_access_tokens(id) ON DELETE CASCADE,
+  FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pat_repo_grants_repo ON pat_repo_grants(repo_id);
 
 CREATE TABLE IF NOT EXISTS forge_issues (
   id TEXT PRIMARY KEY NOT NULL,

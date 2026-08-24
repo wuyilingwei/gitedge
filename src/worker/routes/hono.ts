@@ -2,7 +2,7 @@ import { createMiddleware } from "hono/factory";
 import type { Context, Hono } from "hono";
 import type { Viewer } from "@/client/server/viewer";
 import type { CacheContext } from "@/worker/cache/cache";
-import type { ActiveSession } from "@/worker/auth/session";
+import type { ActiveSession } from "@/worker/auth/sessionTypes";
 import type { Db } from "@/worker/db/d1/client";
 import type { Limiter } from "@/worker/git/operations/limits";
 import type { Logger, LoggerContext } from "@/worker/common/logger";
@@ -34,8 +34,7 @@ export type AppRouter = Hono<AppBindings>;
 export type AppContext<Path extends string = string> = Context<AppBindings, Path>;
 
 type SessionConstraintDecision =
-  | { kind: "primary" }
-  | { kind: "read"; anchor: D1SessionBookmark | D1SessionConstraint };
+  { kind: "primary" } | { kind: "read"; anchor: D1SessionBookmark | D1SessionConstraint };
 
 // Centralized read/write classification. The selector runs once before
 // `next()` and the chosen anchor cannot be changed mid-route: every route

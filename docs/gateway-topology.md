@@ -18,8 +18,8 @@ Auth 的 `/session` 成功响应契约为 `{ "data": { "id": "...", "identifier"
 
 1. 构建 `apps/web`，确认 `workers/gateway/wrangler.jsonc` 中的自定义域名已替换为实际域名。
 2. 先部署 Auth、Forge、Git，再部署 Gateway；Service Binding 的 `service` 名称必须与内部 Worker 的 `name` 一致。
-3. Git 配置中的 D1/KV ID 使用 deploy-time placeholder，部署前替换为实际资源 ID；不要把秘密写入 JSONC，使用 `wrangler secret put`。
-4. 使用 `node scripts/deploy-git.mjs --dry-run` 和 `node scripts/deploy-gateway.mjs --dry-run` 检查配置，再执行部署。
+3. Auth、Forge、Git 绑定同一个 D1；Git 另绑定 KV、R2、Queue 和 Durable Object。部署前必须替换配置中的资源 ID；不要把秘密写入 JSONC。
+4. 使用 `npm run deploy:dry-run` 检查四个 Worker，再执行 `npm run deploy`。
 
 ## 本地
 
@@ -28,5 +28,5 @@ Auth 的 `/session` 成功响应契约为 `{ "data": { "id": "...", "identifier"
 ## 安全约束
 
 - 不信任客户端发送的身份头；Gateway 转 Forge 前始终删除并重写它们。
-- Git push 的认证和仓库权限仍由 Git Worker 负责，Gateway 不解析 Git pack body。
+- Git Worker 的部署入口只注册 Smart HTTP 路由；旧 SSR、管理和 OIDC 路由不会暴露。Git push 的认证和仓库权限仍由 Git Worker 负责，Gateway 不解析 Git pack body。
 - Gateway 不把 Auth 的 Cookie 直接转换成 Forge 权限；只有 Auth session endpoint 返回的身份才可成为可信头。
