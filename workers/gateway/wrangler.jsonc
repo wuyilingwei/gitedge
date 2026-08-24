@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gitedge-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-24",
+  "workers_dev": false,
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "../../apps/web/dist",
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "services": [
+    { "binding": "AUTH", "service": "gitedge-auth" },
+    { "binding": "FORGE", "service": "gitedge-forge" },
+    { "binding": "GIT", "service": "gitedge-git" }
+  ],
+  "routes": [
+    { "pattern": "gitedge.example.com", "custom_domain": true }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
