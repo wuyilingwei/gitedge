@@ -4,15 +4,15 @@
 
 ## 路由边界
 
-| 请求                  | Gateway 行为                                                                                             |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| `/api/auth/*`         | 原请求转发到 Auth Worker                                                                                 |
-| `/api/forge/*`        | 先调用 Auth `/internal/session`，成功后移除客户端伪造的 `X-GitEdge-User-*`，注入可信身份头，再转发 Forge |
-| `/:owner/:repo.git/*` | 原请求流式转发到 Git Worker                                                                              |
-| 其他 `GET`/`HEAD`     | 读取 Vue Static Assets；资源 404 时返回 `/index.html`                                                    |
-| 其他方法              | 404                                                                                                      |
+| 请求                  | Gateway 行为                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `/api/auth/*`         | 去掉 `/api/auth` 前缀后转发到 Auth Worker                                                         |
+| `/api/forge/*`        | 先调用 Auth `/session`，成功后移除客户端伪造的可信头和 Cookie，注入 ID/Name，再去掉前缀转发 Forge |
+| `/:owner/:repo.git/*` | 原请求流式转发到 Git Worker                                                                       |
+| 其他 `GET`/`HEAD`     | 读取 Vue Static Assets；资源 404 时返回 `/index.html`                                             |
+| 其他方法              | 404                                                                                               |
 
-Auth 的 `/internal/session` 响应契约为 `{ "authenticated": false }` 或 `{ "authenticated": true, "userId": "...", "email"?: "...", "name"?: "..." }`。该路径只通过 Service Binding 调用，不应添加公开路由。
+Auth 的 `/session` 成功响应契约为 `{ "data": { "id": "...", "identifier": "..." } }`，未登录返回 401。该路径只通过 Service Binding 调用，不应添加公开路由。
 
 ## 部署
 

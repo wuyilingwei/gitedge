@@ -8,3 +8,5 @@
 - 新增 `scripts/deploy-gateway.mjs`、`scripts/deploy-git.mjs`、`scripts/dev-stack.sh` 与 `docs/gateway-topology.md`。
 - 验证：`npm ci --ignore-scripts` 完成（仅生成被忽略的 `node_modules`）；Gateway 测试 5/5 通过；Gateway/Gateway 测试目标的独立 TypeScript 检查通过；Git `wrangler deploy --dry-run` 成功并列出 DO/KV/D1/R2/Queue 绑定；Gateway dry-run 仍等待 UI agent 生成 `apps/web/dist`。
 - 补充修复：发现全局 ignore 规则误忽略两个 `wrangler.jsonc` 与 `test/gateway/routing.test.ts`；已确认它们不含 node_modules、dist 或 secret，使用精确 `git add -f` 纳入补充提交。
+- 跨服务契约修复：Auth 路由改为去掉 `/api/auth` 前缀并调用 `/session`，解析 `{data:{id,identifier}}`；Forge 去掉 `/api/forge` 前缀，删除 Cookie 和客户端可信头，仅注入 `X-GitEdge-User-Id`/`X-GitEdge-User-Name`；测试覆盖路径重写与 session shape。
+- 验证：Gateway routing tests 5/5 通过；Gateway 源码与测试独立 TypeScript 检查通过；Prettier 与 `git diff --check` 通过。

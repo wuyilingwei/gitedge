@@ -18,8 +18,7 @@ export interface GatewayEnv {
 interface AuthenticatedSession {
   authenticated: true;
   userId: string;
-  email?: string;
-  name?: string;
+  userName: string;
 }
 
 interface AnonymousSession {
@@ -28,20 +27,25 @@ interface AnonymousSession {
 
 type SessionResult = AuthenticatedSession | AnonymousSession;
 
-function isSessionResult(value: unknown): value is SessionResult {
-  if (typeof value !== "object" || value === null || !("authenticated" in value)) {
+interface AuthSessionPayload {
+  data: { id: string; identifier: string } | null;
+}
+
+function isSessionPayload(value: unknown): value is AuthSessionPayload {
+  if (typeof value !== "object" || value === null || !("data" in value)) {
     return false;
   }
 
-  if (value.authenticated === false) {
-    return true;
-  }
-
   return (
-    value.authenticated === true &&
-    "userId" in value &&
-    typeof value.userId === "string" &&
-    value.userId.length > 0
+    value.data === null ||
+    (typeof value.data === "object" &&
+      value.data !== null &&
+      "id" in value.data &&
+      "identifier" in value.data &&
+      typeof value.data.id === "string" &&
+      value.data.id.length > 0 &&
+      typeof value.data.identifier === "string" &&
+      value.data.identifier.length > 0)
   );
 }
 
@@ -67,7 +71,7 @@ function withoutTrustedHeaders(headers: Headers): void {
 
 async function readSession(response: Response): Promise<SessionResult | Response> {
   if (response.status === 401 || response.status === 403) {
-    return response;
+    return { authenticated: false };
   }
   if (!response.ok) {
     return new Response(JSON.stringify({ error: "Authentication service unavailable" }), {
@@ -77,20 +81,25 @@ async function readSession(response: Response): Promise<SessionResult | Response
   }
 
   const payload: unknown = await response.json();
-  if (!isSessionResult(payload)) {
+  if (!isSessionPayload(payload)) {
     return new Response(JSON.stringify({ error: "Invalid authentication response" }), {
       status: 502,
       headers: { "Content-Type": "application/json; charset=utf-8" },
     });
   }
-  return payload;
+  if (payload.data === null) return { authenticated: false };
+  return {
+    authenticated: true,
+    userId: payload.data.id,
+    userName: payload.data.identifier,
+  };
 }
 
 async function authenticate(
   request: Request,
   auth: GatewayService
 ): Promise<SessionResult | Response> {
-  const sessionUrl = new URL("/internal/session", request.url);
+  const sessionUrl = new URL("/session", request.url);
   const headers = new Headers();
   const cookie = request.headers.get("Cookie");
   if (cookie) {
@@ -100,13 +109,19 @@ async function authenticate(
   return readSession(await auth.fetch(new Request(sessionUrl, { headers })));
 }
 
+function forwardServicePath(request: Request, prefix: string): Request {
+  const pathname = new URL(request.url).pathname;
+  const servicePath = pathname.slice(prefix.length) || "/";
+  return withPath(request, servicePath);
+}
+
 function forwardForge(request: Request, session: AuthenticatedSession): Request {
   const headers = new Headers(request.headers);
   withoutTrustedHeaders(headers);
+  headers.delete("Cookie");
   headers.set("X-GitEdge-User-Id", session.userId);
-  if (session.email) headers.set("X-GitEdge-User-Email", session.email);
-  if (session.name) headers.set("X-GitEdge-User-Name", session.name);
-  return new Request(request, { headers });
+  headers.set("X-GitEdge-User-Name", session.userName);
+  return new Request(forwardServicePath(request, "/api/forge"), { headers });
 }
 
 async function serveSpa(request: Request, assets: GatewayService): Promise<Response> {
@@ -121,7 +136,7 @@ export async function handleGatewayRequest(request: Request, env: GatewayEnv): P
   const url = new URL(request.url);
 
   if (isApiPath(url.pathname, "/api/auth")) {
-    return env.AUTH.fetch(request);
+    return env.AUTH.fetch(forwardServicePath(request, "/api/auth"));
   }
 
   if (isApiPath(url.pathname, "/api/forge")) {

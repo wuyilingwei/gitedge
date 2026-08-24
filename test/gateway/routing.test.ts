@@ -17,7 +17,7 @@ function environment(
       overrides.auth ??
       service(
         () =>
-          new Response(JSON.stringify({ authenticated: false }), {
+          new Response(JSON.stringify({ data: null }), {
             headers: { "Content-Type": "application/json" },
           })
       ),
@@ -34,12 +34,12 @@ describe("Gateway routing", () => {
       environment({ auth: service((request) => new Response(new URL(request.url).pathname)) })
     );
 
-    expect(await response.text()).toBe("/api/auth/session");
+    expect(await response.text()).toBe("/session");
   });
 
   it("requires a session before forwarding Forge routes", async () => {
     const response = await handleGatewayRequest(
-      new Request("https://gitedge.example.com/api/forge/repos"),
+      new Request("https://gitedge.example.com/api/forge/repositories"),
       environment()
     );
 
@@ -49,16 +49,19 @@ describe("Gateway routing", () => {
   it("strips spoofed identity headers and injects Auth identity", async () => {
     let received: Request | undefined;
     const response = await handleGatewayRequest(
-      new Request("https://gitedge.example.com/api/forge/repos", {
-        headers: { "X-GitEdge-User-Id": "attacker", Cookie: "session=valid" },
+      new Request("https://gitedge.example.com/api/forge/repositories", {
+        headers: {
+          "X-GitEdge-User-Id": "attacker",
+          "X-GitEdge-User-Name": "attacker",
+          Cookie: "session=valid",
+        },
       }),
       environment({
         auth: service(
           () =>
-            new Response(
-              JSON.stringify({ authenticated: true, userId: "user-1", email: "u@example.com" }),
-              { headers: { "Content-Type": "application/json" } }
-            )
+            new Response(JSON.stringify({ data: { id: "user-1", identifier: "Rosmontis" } }), {
+              headers: { "Content-Type": "application/json" },
+            })
         ),
         forge: service((request) => {
           received = request;
@@ -69,7 +72,9 @@ describe("Gateway routing", () => {
 
     expect(response.status).toBe(200);
     expect(received?.headers.get("X-GitEdge-User-Id")).toBe("user-1");
-    expect(received?.headers.get("X-GitEdge-User-Email")).toBe("u@example.com");
+    expect(received?.headers.get("X-GitEdge-User-Name")).toBe("Rosmontis");
+    expect(received?.headers.get("Cookie")).toBeNull();
+    expect(new URL(received?.url ?? "https://invalid").pathname).toBe("/repositories");
   });
 
   it("routes Git Smart HTTP paths to the Git binding", async () => {

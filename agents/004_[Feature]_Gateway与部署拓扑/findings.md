@@ -6,3 +6,4 @@
 - `[Wrangler gateway dry-run]` -> `apps/web/dist` 尚未出现在本分支 -> Wrangler 在读取 assets.directory 时停止 -> 等 UI agent 合并 Vue 构建产物后重跑。
 - `[Wrangler git dry-run]` -> 初次 wrapper 构建因 worktree 未安装 npm 依赖失败 -> `npm ci --ignore-scripts` 后 dry-run 成功，显示 DO/KV/D1/R2/Queue 绑定 -> 说明 Git Worker 配置和 wrapper 可被 Wrangler 打包。
 - `[资源 ID]` -> Git Worker 配置需要 KV/D1 ID -> 使用明确的 `REPLACE_WITH_*` deploy-time placeholders，不写入秘密，也不伪造生产资源。
+- `[服务契约对齐]` -> Auth 对外 Gateway 前缀为 `/api/auth`、内部路由为 `/session`，session 成功返回 `{data:{id,identifier}}`；Forge 内部路由不含 `/api/forge` -> Gateway 统一做前缀剥离，并仅向 Forge 注入 `X-GitEdge-User-Id`/`X-GitEdge-User-Name`，同时删除 Cookie 和客户端同名可信头。
