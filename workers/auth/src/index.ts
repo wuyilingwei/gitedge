@@ -7,7 +7,7 @@ type SessionRow = { id: string; identifier: string };
 
 const SESSION_COOKIE = "gitedge_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-const PBKDF2_ITERATIONS = 210_000;
+const PBKDF2_ITERATIONS = 600_000;
 
 function json(body: unknown, status = 200, headers?: HeadersInit): Response {
   const responseHeaders = new Headers(headers);
@@ -105,8 +105,15 @@ export async function login(env: AuthEnv, input: unknown): Promise<ServiceResult
     "SELECT id, identifier, password_salt, password_hash FROM users WHERE identifier = ?",
   ).bind(identifier).first<UserRow>();
   if (!user) return { ok: false, status: 401, error: { code: "unauthorized", message: "Invalid identifier or password." } };
-  const passwordHash = await derivePasswordHash(parsed.data.password, base64ToBytes(user.password_salt));
-  if (passwordHash !== user.password_hash) return { ok: false, status: 401, error: { code: "unauthorized", message: "Invalid identifier or password." } };
+  let passwordMatches = false;
+  try {
+    const passwordHash = await derivePasswordHash(parsed.data.password, base64ToBytes(user.password_salt));
+    passwordMatches = crypto.subtle.timingSafeEqual(base64ToBytes(passwordHash), base64ToBytes(user.password_hash));
+  } catch {
+    // A malformed stored credential must not reveal a distinct authentication outcome.
+    passwordMatches = false;
+  }
+  if (!passwordMatches) return { ok: false, status: 401, error: { code: "unauthorized", message: "Invalid identifier or password." } };
   return { ok: true, data: { id: user.id, identifier: user.identifier, sessionToken: await issueSession(env, user.id) } };
 }
 

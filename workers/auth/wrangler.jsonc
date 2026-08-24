@@ -1,0 +1,14 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gitedge-auth",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "gitedge",
+    "database_id": "REPLACE_WITH_SHARED_D1_DATABASE_ID"
+  }],
+  "observability": { "enabled": true }
+}

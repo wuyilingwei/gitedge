@@ -18,3 +18,7 @@ interface D1Database {
   prepare(query: string): D1PreparedStatement;
   batch(statements: readonly D1PreparedStatement[]): Promise<readonly D1Result[]>;
 }
+
+interface SubtleCrypto {
+  timingSafeEqual(left: BufferSource, right: BufferSource): boolean;
+}
