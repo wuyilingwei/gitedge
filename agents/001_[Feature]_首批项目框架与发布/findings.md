@@ -18,3 +18,12 @@
 - `git-on-cloudflare` 的当前上游实现、许可与可复用边界。
 - Cloudflare 账户、Wrangler、GitHub CLI 的发布条件。
 - 当前 Cloudflare Worker/D1/DO/R2/Containers 配置与 API 形状。
+
+## 基线验证
+
+- [上游 `npm run test` 有 5 个 suite 在导入期失败] -> [在 Node Vitest 中复现并定位 `cloudflare:workers` 无法解析] -> [34 个测试通过、5 个 suite 未执行；这是固定上游基线问题，不能把单元测试整体宣称通过]
+- [上游锁文件安装后报告 15 个依赖漏洞] -> [运行 `npm audit --json`] -> [0 critical、11 high、4 moderate；直接依赖 Hono 版本低于修复版本，Wrangler/Vite 工具链也有传递漏洞，GitEdge 整合后必须刷新锁文件并重新审计]
+- [怀疑固定上游无法构建] -> [执行 `npm run typecheck` 与 `npm run build`] -> [两者成功；构建仍包含旧 React SSR 客户端，最终 Vue 入口整合后需避免把它当作码锋前端]
+- [更新 Workers 工具链后 ExecutionContext 新增 `tracing`/`abort` 且 Node Vitest 无法解析 `cloudflare:workers`] -> [补齐 fallback context，并在根 `/test/support` 提供 Node-only runtime alias] -> [根单元测试恢复为 52/52 通过，typecheck 通过]
+- [依赖更新可能只移动版本而未消除高危项] -> [更新 semver 范围内依赖，并将 `@cloudflare/vitest-pool-workers` 升至当前版本] -> [npm audit 降至 0 high / 0 critical / 4 moderate]
+- [需要验证真实 Workers runtime 路径] -> [执行完整 `npm run test:workers`] -> [54 个文件、320 个测试通过；结束时 runtime 另报一次 `Network connection lost` uncaught promise，需要在最终整合后重跑确认]

@@ -16,7 +16,7 @@
  */
 
 import type { CacheContext } from "@/worker/cache";
-import { exports as workerExports } from "cloudflare:workers";
+import { exports as workerExports, tracing as workerTracing } from "cloudflare:workers";
 import { bytesEqual } from "@/worker/common/bytes";
 import { bytesToHex } from "@/worker/common/hex";
 import { computeOidBytes, objTypeCode } from "@/worker/git/core/objects";
@@ -659,6 +659,8 @@ function ensureResolveCacheContext(
         passThroughOnException() {},
         props: undefined,
         exports: workerExports,
+        tracing: workerTracing,
+        abort() {},
       },
       memo: {},
     } satisfies CacheContext);
