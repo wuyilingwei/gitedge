@@ -5,6 +5,7 @@ import { useRoute } from "vue-router";
 import { api, type Issue, type PullRequest, type Repository, type WikiPage } from "../lib/api";
 import StatusState from "../components/StatusState.vue";
 import FormActions from "../components/FormActions.vue";
+import { sessionState } from "../lib/session";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -15,6 +16,7 @@ const repository = ref<Repository | null>(null);
 const issues = ref<Issue[]>([]);
 const pulls = ref<PullRequest[]>([]);
 const wiki = ref<WikiPage[]>([]);
+const canWrite = ref(false);
 const loading = ref(true);
 const error = ref("");
 const showForm = ref(false);
@@ -27,15 +29,33 @@ const wikiForm = ref({ slug: "", title: "", body: "" });
 async function load() {
   loading.value = true;
   error.value = "";
+  canWrite.value = false;
   try {
-    const repositories = await api.repositories();
-    repository.value =
-      repositories.find((item) => item.owner === owner.value && item.name === repoName.value) ||
-      null;
+    if (sessionState.user) {
+      const repositories = await api.repositories();
+      repository.value =
+        repositories.find((item) => item.owner === owner.value && item.name === repoName.value) ||
+        null;
+      canWrite.value = repository.value !== null;
+    }
+    if (!repository.value)
+      repository.value = await api.publicRepository(owner.value, repoName.value);
     if (!repository.value) throw new Error("not-found");
-    if (section.value === "issues") issues.value = await api.issues(repository.value.id);
-    if (section.value === "pulls") pulls.value = await api.pulls(repository.value.id);
-    if (section.value === "wiki") wiki.value = await api.wiki(repository.value.id);
+    if (section.value === "issues") {
+      issues.value = canWrite.value
+        ? await api.issues(repository.value.id)
+        : await api.publicIssues(owner.value, repoName.value);
+    }
+    if (section.value === "pulls") {
+      pulls.value = canWrite.value
+        ? await api.pulls(repository.value.id)
+        : await api.publicPulls(owner.value, repoName.value);
+    }
+    if (section.value === "wiki") {
+      wiki.value = canWrite.value
+        ? await api.wiki(repository.value.id)
+        : await api.publicWiki(owner.value, repoName.value);
+    }
   } catch {
     error.value = t("apiError");
   } finally {
@@ -118,7 +138,7 @@ watch(() => [route.params.owner, route.params.repo, route.params.section], load,
         t("wiki")
       }}</RouterLink>
     </nav>
-    <div v-if="!loading && !error && section !== 'code'" class="section-actions">
+    <div v-if="!loading && !error && canWrite && section !== 'code'" class="section-actions">
       <button class="button primary" @click="showForm = !showForm">
         +
         {{
