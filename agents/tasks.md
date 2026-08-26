@@ -11,3 +11,4 @@
 | 003  | [Feature] 授权与 Forge 服务  |                 实现独立 Auth/Forge Worker、D1 schema 与 API                  |   多 Worker 服务需要真实授权和协作数据边界   | ✅ 已完成 |
 | 004  | [Feature] Gateway 与部署拓扑 |             实现公开 Gateway、Service Bindings 与 Git Worker 配置             |  让 Vue/Auth/Forge/Git 以可发布拓扑协同工作  | ✅ 已完成 |
 | 005  | [Deploy] My 账户与自定义域名 | 在 My 账户创建生产资源并部署到 gitedge.wuyilingwei.com | 完成首批框架的真实 Cloudflare 上线与浏览器验收 | 🔄 进行中 |
+| 006  | [Config] 生产部署配置 |                 固化生产账户、Gateway 域名与资源占位符安全部署检查                 |  为生产部署准备可验证配置且避免误创建或泄露资源信息 | ✅ 已完成 |
