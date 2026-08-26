@@ -6,9 +6,20 @@ import {
 } from "../../../packages/contracts/src/index";
 import { createLogger } from "../../../src/worker/common/logger";
 
-type AuthEnv = { readonly DB: D1Database; readonly LOG_LEVEL?: string };
-type UserRow = { id: string; identifier: string; password_salt: string; password_hash: string };
-type SessionRow = { id: string; identifier: string };
+type AuthEnv = {
+  readonly DB: D1Database;
+  readonly LOG_LEVEL?: string;
+  readonly ALLOW_PUBLIC_SIGNUP: string;
+  readonly DEFAULT_USER_GROUP: string;
+};
+type UserRow = {
+  id: string;
+  identifier: string;
+  group_key: string;
+  password_salt: string;
+  password_hash: string;
+};
+type SessionRow = { id: string; identifier: string; group_key: string };
 
 const SESSION_COOKIE = "gitedge_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
@@ -22,7 +33,7 @@ function json(body: unknown, status = 200, headers?: HeadersInit): Response {
 
 function fail(
   status: number,
-  code: "bad_request" | "unauthorized" | "conflict" | "method_not_allowed",
+  code: "bad_request" | "unauthorized" | "forbidden" | "conflict" | "method_not_allowed",
   message: string
 ): Response {
   return json({ error: { code, message } }, status);
@@ -106,6 +117,12 @@ export async function register(
   env: AuthEnv,
   input: unknown
 ): Promise<ServiceResult<TrustedUser & { readonly sessionToken: string }>> {
+  if (env.ALLOW_PUBLIC_SIGNUP !== "true")
+    return {
+      ok: false,
+      status: 403,
+      error: { code: "forbidden", message: "Public registration is disabled." },
+    };
   const parsed = RegisterInputSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -124,13 +141,18 @@ export async function register(
       error: { code: "conflict", message: "Identifier is already registered." },
     };
   const salt: Uint8Array<ArrayBuffer> = crypto.getRandomValues(new Uint8Array(16));
-  const user: TrustedUser = { id: crypto.randomUUID(), identifier };
+  const user: TrustedUser = {
+    id: crypto.randomUUID(),
+    identifier,
+    groupKey: env.DEFAULT_USER_GROUP,
+  };
   await env.DB.prepare(
-    "INSERT INTO users (id, identifier, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO users (id, identifier, group_key, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
   )
     .bind(
       user.id,
       identifier,
+      user.groupKey,
       bytesToBase64(salt),
       await derivePasswordHash(parsed.data.password, salt),
       Date.now()
@@ -162,7 +184,7 @@ export async function login(
     };
   const identifier = parsed.data.identifier.toLowerCase();
   const user = await env.DB.prepare(
-    "SELECT id, identifier, password_salt, password_hash FROM users WHERE identifier = ?"
+    "SELECT id, identifier, group_key, password_salt, password_hash FROM users WHERE identifier = ?"
   )
     .bind(identifier)
     .first<UserRow>();
@@ -197,6 +219,7 @@ export async function login(
     data: {
       id: user.id,
       identifier: user.identifier,
+      groupKey: user.group_key,
       sessionToken: await issueSession(env, user.id),
     },
   };
@@ -213,7 +236,7 @@ export async function session(
       error: { code: "unauthorized", message: "Authentication is required." },
     };
   const row = await env.DB.prepare(
-    "SELECT users.id, users.identifier FROM auth_sessions JOIN users ON users.id = auth_sessions.user_id WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?"
+    "SELECT users.id, users.identifier, users.group_key FROM auth_sessions JOIN users ON users.id = auth_sessions.user_id WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?"
   )
     .bind(await hashToken(token), Date.now())
     .first<SessionRow>();
@@ -223,7 +246,7 @@ export async function session(
       status: 401,
       error: { code: "unauthorized", message: "Authentication is required." },
     };
-  return { ok: true, data: { id: row.id, identifier: row.identifier } };
+  return { ok: true, data: { id: row.id, identifier: row.identifier, groupKey: row.group_key } };
 }
 
 export async function logout(env: AuthEnv, token: string | null): Promise<void> {
@@ -241,17 +264,37 @@ export default {
       const result = await register(env, await readJson(request));
       if (!result.ok) return json({ error: result.error }, result.status);
       logger.info("auth:registered", { userId: result.data.id });
-      return json({ data: { id: result.data.id, identifier: result.data.identifier } }, 201, {
-        "Set-Cookie": createSessionCookie(result.data.sessionToken, SESSION_MAX_AGE_SECONDS),
-      });
+      return json(
+        {
+          data: {
+            id: result.data.id,
+            identifier: result.data.identifier,
+            groupKey: result.data.groupKey,
+          },
+        },
+        201,
+        {
+          "Set-Cookie": createSessionCookie(result.data.sessionToken, SESSION_MAX_AGE_SECONDS),
+        }
+      );
     }
     if (request.method === "POST" && path === "/login") {
       const result = await login(env, await readJson(request));
       if (!result.ok) return json({ error: result.error }, result.status);
       logger.info("auth:logged-in", { userId: result.data.id });
-      return json({ data: { id: result.data.id, identifier: result.data.identifier } }, 200, {
-        "Set-Cookie": createSessionCookie(result.data.sessionToken, SESSION_MAX_AGE_SECONDS),
-      });
+      return json(
+        {
+          data: {
+            id: result.data.id,
+            identifier: result.data.identifier,
+            groupKey: result.data.groupKey,
+          },
+        },
+        200,
+        {
+          "Set-Cookie": createSessionCookie(result.data.sessionToken, SESSION_MAX_AGE_SECONDS),
+        }
+      );
     }
     if (request.method === "POST" && path === "/logout") {
       await logout(env, readCookie(request));

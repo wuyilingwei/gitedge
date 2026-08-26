@@ -20,7 +20,11 @@ export type ServiceResult<T> =
   | { readonly ok: true; readonly data: T }
   | { readonly ok: false; readonly status: number; readonly error: ServiceError["error"] };
 
-export type TrustedUser = { readonly id: string; readonly identifier: string };
+export type TrustedUser = {
+  readonly id: string;
+  readonly identifier: string;
+  readonly groupKey: string;
+};
 
 export const RepositoryRouteCacheRecordSchema = z.object({
   repositoryId: z.string(),
