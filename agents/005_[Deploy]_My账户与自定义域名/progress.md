@@ -14,3 +14,6 @@
 - 远端 migrations list 首次因 Wrangler 多账户选择失败且未产生变更；为部署脚本加入从 Auth 配置派生的显式账户环境，单元测试与完整 dry-run 再次通过。
 - 首轮四 Worker 生产发布成功；权威 DNS、TLS、首页、静态资源、未登录边界与 Cloudflare Custom Domain/入口边界通过。
 - 真实注册发现 PBKDF2 平台上限问题；已完成修复与定向验证，尚待重新发布和全流程验收。
+- 发布 Auth 修复后，生产注册、session、仓库、Issue、PR、Wiki、登出/登录和公开空仓库 Git discovery 全部通过。
+- 删除临时 QA 的 KV 路由键与 D1 user/namespace/repository/Issue/PR/Wiki/session 数据，并以精确 ID 查询确认清零。
+- 浏览器可视化验收被当前局域网 DNS 的空响应阻塞；公共与权威 DNS、TLS 和边缘 HTTP 均已验证正常。

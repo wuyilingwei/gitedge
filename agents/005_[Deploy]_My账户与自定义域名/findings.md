@@ -14,3 +14,5 @@
 - [Worker 集成测试结束期告警] -> [320 项全部通过且进程退出码为 0，但运行器清理时输出 `Network connection lost`] -> [作为测试运行器清理期告警记录，不冒充无告警结果]
 - [D1 migrations 在多账户 OAuth 下忽略配置中的 account 选择] -> [首次只读 migrations list 以未选账户失败，D1 list 则正确定位 `My`] -> [部署脚本从 Auth 配置读取并校验 account ID，仅向 Wrangler 子进程显式传入 `CLOUDFLARE_ACCOUNT_ID`，再次 dry-run 通过]
 - [首次生产注册返回 Cloudflare 1101] -> [Auth 实时日志定位到 PBKDF2 600000 超出 Workers 100000 上限] -> [登记独立修复审计并在重新验收前将参数调整到平台支持的最高值]
+- [生产功能修复后验收] -> [使用临时测试身份依次验证注册、session、仓库、Issue、PR、Wiki、登出、登录与 Git discovery] -> [所有生产响应与数据列表正确，空公开仓库 `git ls-remote` 退出 0；随后精确清理全部临时 D1/KV 数据]
+- [本机浏览器无法解析新域名] -> [对比系统路由器 DNS 与公共/权威解析] -> [1.1.1.1 与 Cloudflare 权威已返回 `172.64.80.1`，本机路由器仍返回空 NOERROR 导致浏览器 `ERR_NAME_NOT_RESOLVED`；这是本地 DNS 缓存/解析器传播问题，不是 Worker/TLS/API 故障]
