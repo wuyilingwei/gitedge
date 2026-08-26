@@ -8,6 +8,7 @@ import { insertPatWithGrants } from "@/worker/db/d1/dal";
 
 import { ensureD1Migrations } from "./util/d1Setup";
 import { seedRepo, type SeededRepo } from "./util/repoSeed";
+import { withEnvOverrides } from "./util/test-helpers";
 
 beforeAll(async () => {
   await ensureD1Migrations(env);
@@ -178,6 +179,39 @@ describe("Git ACL: read paths", () => {
       headers: { Authorization: basicAuth(seed.namespaceSlug, plaintext) },
     });
     expect(res.status).toBe(200);
+  });
+
+  it("applies the user-group RPM limit to authenticated Git requests", async () => {
+    const seed = await seedRepo(env, {
+      namespaceSlug: `acl-pat-rpm-${Math.random().toString(36).slice(2, 8)}`,
+      repoSlug: "site",
+      visibility: "private",
+    });
+    const plaintext = await seedPat({
+      userId: seed.userId,
+      level: "pull",
+      scope: { kind: "repo", repoId: seed.repositoryId },
+    });
+    const headers = { Authorization: basicAuth(seed.namespaceSlug, plaintext) };
+
+    await withEnvOverrides(
+      env,
+      {
+        USER_GROUP_LIMITS_JSON:
+          '{"free":{"rpm":1,"maxRepositories":10,"maxPushBytes":268435456,"maxRepositoryBytes":1073741824,"maxStorageBytes":5368709120}}',
+      },
+      async () => {
+        const first = await workerExports.default.fetch(infoRefs(seed, "git-upload-pack"), {
+          headers,
+        });
+        const second = await workerExports.default.fetch(infoRefs(seed, "git-upload-pack"), {
+          headers,
+        });
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(429);
+        expect(second.headers.get("Retry-After")).toBeTruthy();
+      }
+    );
   });
 
   it("private + Basic username mismatch -> 401", async () => {

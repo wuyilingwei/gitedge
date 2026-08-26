@@ -9,7 +9,12 @@
   "limits": { "cpu_ms": 300000 },
   "durable_objects": {
     "bindings": [
-      { "name": "REPO_DO", "class_name": "RepoDurableObject" }
+      { "name": "REPO_DO", "class_name": "RepoDurableObject" },
+      {
+        "name": "RATE_LIMITER",
+        "class_name": "SharedRateLimitDurableObject",
+        "script_name": "gitedge-limits"
+      }
     ]
   },
   "migrations": [

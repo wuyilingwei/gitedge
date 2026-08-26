@@ -1,21 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 
-export interface RateLimitDecision {
-  allowed: boolean;
-  retryAfter: number;
-}
-
-export interface RateLimitStub {
-  consume(key: string, limit: number, now?: number): Promise<RateLimitDecision>;
-}
-
-export interface RateLimitNamespace {
-  getByName(name: string): RateLimitStub;
-}
+import type { RateLimitDecision } from "../../../packages/contracts/src/index";
 
 type HitRow = { at: number };
 
-export class RateLimitDurableObject extends DurableObject {
+export class SharedRateLimitDurableObject extends DurableObject {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
@@ -58,19 +47,8 @@ export class RateLimitDurableObject extends DurableObject {
   }
 }
 
-const SHARD_COUNT = 32;
-
-export async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-export async function consumeRateLimit(
-  namespace: RateLimitNamespace,
-  key: string,
-  limit: number
-): Promise<RateLimitDecision> {
-  const digest = await sha256Hex(key);
-  const shard = Number.parseInt(digest.slice(0, 2), 16) % SHARD_COUNT;
-  return namespace.getByName(`rate-limit-${shard}`).consume(digest, limit);
-}
+export default {
+  fetch(): Response {
+    return new Response("Not found\n", { status: 404 });
+  },
+};

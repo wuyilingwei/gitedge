@@ -93,6 +93,36 @@ export function parseUserGroupLimits(value: string | undefined): Record<string, 
   }
 }
 
+export interface RateLimitDecision {
+  allowed: boolean;
+  retryAfter: number;
+}
+
+export interface RateLimitStub {
+  consume(key: string, limit: number, now?: number): Promise<RateLimitDecision>;
+}
+
+export interface RateLimitNamespace {
+  getByName(name: string): RateLimitStub;
+}
+
+const RATE_LIMIT_SHARD_COUNT = 32;
+
+export async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function consumeRateLimit(
+  namespace: RateLimitNamespace,
+  key: string,
+  limit: number
+): Promise<RateLimitDecision> {
+  const digest = await sha256Hex(key);
+  const shard = Number.parseInt(digest.slice(0, 2), 16) % RATE_LIMIT_SHARD_COUNT;
+  return namespace.getByName(`rate-limit-${shard}`).consume(digest, limit);
+}
+
 export const RepositoryRouteCacheRecordSchema = z.object({
   repositoryId: z.string(),
   namespaceId: z.string(),

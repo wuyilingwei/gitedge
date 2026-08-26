@@ -27,7 +27,12 @@ import type { Db } from "@/worker/db/d1/client";
 import type { Logger } from "@/worker/common/logger";
 import { touchRepositoryUpdatedAt } from "@/worker/db/d1/dal/repositories";
 import { loadRepositoryQuotaOwner, type RepositoryStorageQuota } from "@/worker/git/quota/storage";
-import { parseUserGroupLimits } from "../../../packages/contracts/src/index";
+import {
+  consumeRateLimit,
+  parseUserGroupLimits,
+  type RateLimitDecision,
+  type RateLimitNamespace,
+} from "../../../packages/contracts/src/index";
 import { workerExecutionContext, type AppContext, type AppRouter } from "./hono";
 
 type GitService = "git-upload-pack" | "git-receive-pack";
@@ -64,6 +69,18 @@ function gitNotFound(): Response {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
+    },
+  });
+}
+
+function rateLimited(decision: RateLimitDecision): Response | null {
+  if (decision.allowed) return null;
+  return new Response("Rate limit exceeded\n", {
+    status: 429,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Retry-After": String(decision.retryAfter),
     },
   });
 }
@@ -423,6 +440,15 @@ async function authorizeGitRouteForRequest(
   if (blocked) return { kind: "response", response: blocked };
 
   if (auth.kind === "pat") {
+    const limits = parseUserGroupLimits(c.env.USER_GROUP_LIMITS_JSON);
+    const groupLimit = limits[auth.verified.groupKey] ?? limits.free;
+    const decision = await consumeRateLimit(
+      c.env.RATE_LIMITER as unknown as RateLimitNamespace,
+      `user:${auth.verified.groupKey}:${auth.verified.userId}`,
+      groupLimit.rpm
+    );
+    const limited = rateLimited(decision);
+    if (limited) return { kind: "response", response: limited };
     // PAT `last_used_at` is a visibility signal for token management only;
     // it is throttled for reads and always attempted for writes.
     scheduleTouchPatLastUsedAt(

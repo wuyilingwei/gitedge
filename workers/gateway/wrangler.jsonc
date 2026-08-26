@@ -18,11 +18,16 @@
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "RATE_LIMITER", "class_name": "RateLimitDurableObject" }
+      {
+        "name": "RATE_LIMITER",
+        "class_name": "SharedRateLimitDurableObject",
+        "script_name": "gitedge-limits"
+      }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["RateLimitDurableObject"] }
+    { "tag": "v1", "new_sqlite_classes": ["RateLimitDurableObject"] },
+    { "tag": "v2", "deleted_classes": ["RateLimitDurableObject"] }
   ],
   "vars": {
     "IP_RPM_LIMIT": "300",

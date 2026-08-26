@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   handleGatewayRequest,
-  RateLimitDurableObject,
   type GatewayEnv,
   type GatewayService,
 } from "../../workers/gateway/src/index";
+import { SharedRateLimitDurableObject } from "../../workers/limits/src/index";
 
 function service(handler: (request: Request) => Response | Promise<Response>): GatewayService {
   return { fetch: async (request) => handler(request) };
@@ -39,7 +39,7 @@ describe("Gateway strict rate limits", () => {
       storage: { sql },
       blockConcurrencyWhile: (task: () => Promise<void>) => task(),
     } as unknown as DurableObjectState;
-    const limiter = new RateLimitDurableObject(ctx, {} as Env);
+    const limiter = new SharedRateLimitDurableObject(ctx, {} as Env);
 
     expect(await limiter.consume("ip-a", 2, 100_000)).toEqual({
       allowed: true,

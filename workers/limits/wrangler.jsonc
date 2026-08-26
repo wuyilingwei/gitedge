@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gitedge-limits",
+  "account_id": "df4481f3ce1fa0394b4617442a97d147",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "durable_objects": {
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "SharedRateLimitDurableObject" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RateLimitDurableObject"] },
+    {
+      "tag": "v2",
+      "renamed_classes": [
+        { "from": "RateLimitDurableObject", "to": "SharedRateLimitDurableObject" }
+      ]
+    }
+  ],
+  "observability": { "enabled": true }
+}

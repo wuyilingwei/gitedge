@@ -1,6 +1,9 @@
-import { consumeRateLimit, type RateLimitNamespace, type RateLimitDecision } from "./rate-limit";
-import { parseUserGroupLimits } from "../../../packages/contracts/src/index";
-export { RateLimitDurableObject } from "./rate-limit";
+import {
+  consumeRateLimit,
+  parseUserGroupLimits,
+  type RateLimitDecision,
+  type RateLimitNamespace,
+} from "../../../packages/contracts/src/index";
 
 const TRUSTED_USER_HEADERS = [
   "x-gitedge-user-id",

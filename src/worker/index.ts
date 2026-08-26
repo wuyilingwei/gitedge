@@ -75,3 +75,4 @@ export default {
 };
 
 export { RepoDurableObject } from "./do/repo/repoDO";
+export { SharedRateLimitDurableObject } from "../../workers/limits/src/index";
