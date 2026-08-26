@@ -1,8 +1,9 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "gitedge-gateway",
+  "account_id": "df4481f3ce1fa0394b4617442a97d147",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-24",
+  "compatibility_date": "2026-08-26",
   "workers_dev": false,
   "assets": {
     "binding": "ASSETS",
@@ -16,7 +17,7 @@
     { "binding": "GIT", "service": "gitedge-git" }
   ],
   "routes": [
-    { "pattern": "gitedge.example.com", "custom_domain": true }
+    { "pattern": "gitedge.wuyilingwei.com", "custom_domain": true }
   ],
   "observability": {
     "enabled": true

@@ -1,8 +1,9 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "gitedge-auth",
+  "account_id": "df4481f3ce1fa0394b4617442a97d147",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-24",
+  "compatibility_date": "2026-08-26",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "d1_databases": [{
