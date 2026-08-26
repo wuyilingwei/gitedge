@@ -9,6 +9,10 @@ function service(handler: (request: Request) => Response | Promise<Response>): G
   return { fetch: async (request) => handler(request) };
 }
 
+const unlimitedRateLimiter = {
+  getByName: () => ({ consume: async () => ({ allowed: true, retryAfter: 0 }) }),
+};
+
 function environment(
   overrides: Partial<Record<"auth" | "forge" | "git" | "assets", GatewayService>> = {}
 ): GatewayEnv {
@@ -24,6 +28,7 @@ function environment(
     FORGE: overrides.forge ?? service(() => new Response("forge")),
     GIT: overrides.git ?? service(() => new Response("git")),
     ASSETS: overrides.assets ?? service(() => new Response("asset")),
+    RATE_LIMITER: unlimitedRateLimiter,
   };
 }
 
@@ -37,13 +42,18 @@ describe("Gateway routing", () => {
     expect(await response.text()).toBe("/session");
   });
 
-  it("requires a session before forwarding Forge routes", async () => {
+  it("forwards anonymous Forge GET routes while rejecting writes", async () => {
     const response = await handleGatewayRequest(
       new Request("https://gitedge.example.com/api/forge/repositories"),
       environment()
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
+    const writeResponse = await handleGatewayRequest(
+      new Request("https://gitedge.example.com/api/forge/repositories", { method: "POST" }),
+      environment()
+    );
+    expect(writeResponse.status).toBe(401);
   });
 
   it("strips spoofed identity headers and injects Auth identity", async () => {
@@ -59,9 +69,12 @@ describe("Gateway routing", () => {
       environment({
         auth: service(
           () =>
-            new Response(JSON.stringify({ data: { id: "user-1", identifier: "Rosmontis" } }), {
-              headers: { "Content-Type": "application/json" },
-            })
+            new Response(
+              JSON.stringify({
+                data: { id: "user-1", identifier: "Rosmontis", groupKey: "team" },
+              }),
+              { headers: { "Content-Type": "application/json" } }
+            )
         ),
         forge: service((request) => {
           received = request;
@@ -73,6 +86,7 @@ describe("Gateway routing", () => {
     expect(response.status).toBe(200);
     expect(received?.headers.get("X-GitEdge-User-Id")).toBe("user-1");
     expect(received?.headers.get("X-GitEdge-User-Name")).toBe("Rosmontis");
+    expect(received?.headers.get("X-GitEdge-User-Group")).toBe("team");
     expect(received?.headers.get("Cookie")).toBeNull();
     expect(new URL(received?.url ?? "https://invalid").pathname).toBe("/repositories");
   });

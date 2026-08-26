@@ -83,6 +83,10 @@ export const api = {
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   session: () => request<User>("/api/auth/session"),
   repositories: () => request<Repository[]>("/api/forge/repositories"),
+  publicRepository: (owner: string, slug: string) =>
+    request<Repository>(
+      `/api/forge/public/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}`
+    ),
   createRepository: (payload: {
     name: string;
     description: string;
@@ -98,6 +102,10 @@ export const api = {
     }),
   issues: (repositoryId: string) =>
     request<Issue[]>(`/api/forge/repositories/${repositoryId}/issues`),
+  publicIssues: (owner: string, slug: string) =>
+    request<Issue[]>(
+      `/api/forge/public/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}/issues`
+    ),
   createIssue: (repositoryId: string, payload: { title: string; body: string }) =>
     request<Issue>(`/api/forge/repositories/${repositoryId}/issues`, {
       method: "POST",
@@ -105,6 +113,10 @@ export const api = {
     }),
   pulls: (repositoryId: string) =>
     request<PullRequest[]>(`/api/forge/repositories/${repositoryId}/pull-requests`),
+  publicPulls: (owner: string, slug: string) =>
+    request<PullRequest[]>(
+      `/api/forge/public/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}/pull-requests`
+    ),
   createPullRequest: (
     repositoryId: string,
     payload: { title: string; body: string; head: string; base: string }
@@ -120,6 +132,10 @@ export const api = {
     }),
   wiki: (repositoryId: string) =>
     request<WikiPage[]>(`/api/forge/repositories/${repositoryId}/wiki`),
+  publicWiki: (owner: string, slug: string) =>
+    request<WikiPage[]>(
+      `/api/forge/public/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}/wiki`
+    ),
   createWikiPage: (repositoryId: string, payload: { slug: string; title: string; body: string }) =>
     request<WikiPage>(
       `/api/forge/repositories/${repositoryId}/wiki/${encodeURIComponent(payload.slug)}`,

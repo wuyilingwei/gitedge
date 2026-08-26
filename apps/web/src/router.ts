@@ -11,14 +11,18 @@ export const router = createRouter({
     { path: "/login", component: AuthView, meta: { public: true } },
     { path: "/register", component: AuthView, meta: { public: true } },
     { path: "/dashboard", component: DashboardView },
-    { path: "/:owner/:repo/:section(code|issues|pulls|wiki|settings)?", component: RepositoryView },
+    {
+      path: "/:owner/:repo/:section(code|issues|pulls|wiki|settings)?",
+      component: RepositoryView,
+      meta: { allowAnonymous: true },
+    },
   ],
 });
 
 router.beforeEach(async (to) => {
   if (!sessionState.checked) await refreshSession();
-  if (!to.meta.public && !sessionState.user) {
+  if (!to.meta.public && !to.meta.allowAnonymous && !sessionState.user) {
     return { path: "/login", query: { redirect: to.fullPath } };
   }
-  if (to.meta.public && sessionState.user) return "/dashboard";
+  if ((to.path === "/login" || to.path === "/register") && sessionState.user) return "/dashboard";
 });

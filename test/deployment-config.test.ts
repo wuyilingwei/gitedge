@@ -32,6 +32,9 @@ interface WorkerConfig {
   routes?: unknown[];
   services?: Array<{ binding: string; service: string }>;
   workers_dev?: boolean;
+  vars?: Record<string, string>;
+  durable_objects?: { bindings: Array<{ name: string; class_name: string }> };
+  migrations?: Array<{ tag: string; new_sqlite_classes: string[] }>;
 }
 
 const targetAccountId = "df4481f3ce1fa0394b4617442a97d147";
@@ -105,6 +108,32 @@ describe("production deployment configuration", () => {
     expect(readdirSync(new URL("../migrations/", import.meta.url))).toContain(
       "0001_auth_forge.sql"
     );
+    expect(readdirSync(new URL("../migrations/", import.meta.url))).toContain(
+      "0002_user_groups.sql"
+    );
+  });
+
+  it("keeps signup, group quotas, and the strict IP limiter explicit", () => {
+    expect(configs.auth.vars).toMatchObject({
+      ALLOW_PUBLIC_SIGNUP: "true",
+      DEFAULT_USER_GROUP: "free",
+    });
+    const groupLimitsJson = configs.gateway.vars?.USER_GROUP_LIMITS_JSON;
+    expect(groupLimitsJson).toBeTruthy();
+    expect(configs.forge.vars?.USER_GROUP_LIMITS_JSON).toBe(groupLimitsJson);
+    expect(configs.git.vars?.USER_GROUP_LIMITS_JSON).toBe(groupLimitsJson);
+    expect(JSON.parse(groupLimitsJson!)).toMatchObject({
+      free: { rpm: 120, maxRepositories: 10 },
+      team: { rpm: 600, maxRepositories: 100 },
+      admin: { rpm: 1200, maxRepositories: 1000 },
+    });
+    expect(configs.gateway.vars?.IP_RPM_LIMIT).toBe("300");
+    expect(configs.gateway.durable_objects?.bindings).toEqual([
+      { name: "RATE_LIMITER", class_name: "RateLimitDurableObject" },
+    ]);
+    expect(configs.gateway.migrations).toEqual([
+      { tag: "v1", new_sqlite_classes: ["RateLimitDurableObject"] },
+    ]);
   });
 
   it("keeps Forge and Git on the same route-cache KV namespace", () => {

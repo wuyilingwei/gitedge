@@ -7,6 +7,7 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   tesseraSub: text("tessera_sub").notNull().unique(),
+  groupKey: text("group_key").notNull().default("free"),
   createdAt: integer("created_at").notNull(),
 });
 

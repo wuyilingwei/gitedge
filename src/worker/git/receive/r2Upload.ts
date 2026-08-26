@@ -14,6 +14,22 @@ export type StagedPackUpload = {
   cleanup(): Promise<void>;
 };
 
+export class PackSizeLimitError extends Error {
+  readonly maxBytes: number;
+
+  constructor(maxBytes: number) {
+    super(`Push pack exceeds the ${maxBytes}-byte limit.`);
+    this.name = "PackSizeLimitError";
+    this.maxBytes = maxBytes;
+  }
+}
+
+export function assertPackSizeLimit(totalBytes: number, maxBytes: number | undefined): void {
+  if (maxBytes !== undefined && totalBytes > maxBytes) {
+    throw new PackSizeLimitError(maxBytes);
+  }
+}
+
 function formatProgressBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) {
     return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
@@ -124,10 +140,12 @@ async function stageKnownLengthPack(args: {
   limiter: SubrequestLimiter;
   countSubrequest(op: string, n?: number): void;
   onProgress?: (message: string) => void;
+  maxBytes?: number;
 }): Promise<StagedPackUpload> {
   if (args.expectedLength <= 0) {
     throw new Error("Streaming receive expected a non-empty pack body.");
   }
+  assertPackSizeLimit(args.expectedLength, args.maxBytes);
 
   const fixedLengthStream = new FixedLengthStream(args.expectedLength);
   const uploadWriter = fixedLengthStream.writable.getWriter();
@@ -240,6 +258,7 @@ async function stageMultipartPack(args: {
   limiter: SubrequestLimiter;
   countSubrequest(op: string, n?: number): void;
   onProgress?: (message: string) => void;
+  maxBytes?: number;
 }): Promise<StagedPackUpload> {
   args.countSubrequest("r2:create-pack-multipart");
   const upload = await args.limiter.run("r2:create-pack-multipart", async () => {
@@ -266,6 +285,7 @@ async function stageMultipartPack(args: {
       const chunk = cloneBytes(next.value);
 
       totalBytes += chunk.byteLength;
+      assertPackSizeLimit(totalBytes, args.maxBytes);
       if (headerPrefix.byteLength < PACK_HEADER_BYTES) {
         const headerNeeded = PACK_HEADER_BYTES - headerPrefix.byteLength;
         headerPrefix = appendBytes(headerPrefix, chunk.subarray(0, headerNeeded));
@@ -417,6 +437,7 @@ export async function stagePackToR2(args: {
   limiter: SubrequestLimiter;
   countSubrequest(op: string, n?: number): void;
   onProgress?: (message: string) => void;
+  maxBytes?: number;
 }): Promise<StagedPackUpload> {
   const remainingLength = getRemainingBodyLength(args.request, args.bytesConsumed);
   if (remainingLength !== undefined) {
@@ -428,6 +449,7 @@ export async function stagePackToR2(args: {
       limiter: args.limiter,
       countSubrequest: args.countSubrequest,
       onProgress: args.onProgress,
+      maxBytes: args.maxBytes,
     });
   }
 
@@ -438,6 +460,7 @@ export async function stagePackToR2(args: {
     limiter: args.limiter,
     countSubrequest: args.countSubrequest,
     onProgress: args.onProgress,
+    maxBytes: args.maxBytes,
   });
 }
 

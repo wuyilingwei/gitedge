@@ -26,6 +26,8 @@ import {
 import type { Db } from "@/worker/db/d1/client";
 import type { Logger } from "@/worker/common/logger";
 import { touchRepositoryUpdatedAt } from "@/worker/db/d1/dal/repositories";
+import { loadRepositoryQuotaOwner, type RepositoryStorageQuota } from "@/worker/git/quota/storage";
+import { parseUserGroupLimits } from "../../../packages/contracts/src/index";
 import { workerExecutionContext, type AppContext, type AppRouter } from "./hono";
 
 type GitService = "git-upload-pack" | "git-receive-pack";
@@ -205,9 +207,11 @@ async function handleReceivePackPOST(
   request: Request,
   ctx: ExecutionContext,
   db: Db,
-  log: Logger
+  log: Logger,
+  storageQuota: RepositoryStorageQuota
 ) {
   return await handleStreamingReceivePackPOST(env, route.doName, request, ctx, {
+    storageQuota,
     onRepoStateChanged: async ({ changed }) => {
       if (!changed) return;
       try {
@@ -221,6 +225,23 @@ async function handleReceivePackPOST(
       }
     },
   });
+}
+
+async function resolveRepositoryStorageQuota(
+  env: Env,
+  repositoryId: string
+): Promise<RepositoryStorageQuota | null> {
+  const owner = await loadRepositoryQuotaOwner(env, repositoryId);
+  if (!owner) return null;
+  const limits = parseUserGroupLimits(env.USER_GROUP_LIMITS_JSON);
+  const groupLimits = limits[owner.groupKey] ?? limits.free;
+  return {
+    ownerUserId: owner.ownerUserId,
+    groupKey: owner.groupKey,
+    maxPushBytes: groupLimits.maxPushBytes,
+    maxRepositoryBytes: groupLimits.maxRepositoryBytes,
+    maxStorageBytes: groupLimits.maxStorageBytes,
+  };
 }
 
 // Validate URL slug shape before any DB/DO/R2 work. Mirrors `repoKey` validity.
@@ -253,8 +274,7 @@ async function resolveGitRoute(
 }
 
 type ResolveGitRouteResult =
-  | { kind: "ok"; route: RepositoryRoute }
-  | { kind: "response"; response: Response };
+  { kind: "ok"; route: RepositoryRoute } | { kind: "response"; response: Response };
 
 async function resolveGitRouteForRequest(
   c: AppContext,
@@ -378,8 +398,7 @@ async function gateGitPush(
 }
 
 type GitAuthorizationResult =
-  | { kind: "ok"; cacheCtx: CacheContext }
-  | { kind: "response"; response: Response };
+  { kind: "ok"; cacheCtx: CacheContext } | { kind: "response"; response: Response };
 
 async function authorizeGitRouteForRequest(
   c: AppContext,
@@ -477,13 +496,16 @@ export function registerGitRoutes(router: AppRouter) {
       "write"
     );
     if (authorized.kind === "response") return authorized.response;
+    const storageQuota = await resolveRepositoryStorageQuota(c.env, route.repositoryId);
+    if (!storageQuota) return gitNotFound();
     return await handleReceivePackPOST(
       c.env,
       route,
       c.req.raw,
       workerExecutionContext(c),
       c.var.db,
-      c.var.logFor({ service: "ReceiveAcl", repoId: route.doName })
+      c.var.logFor({ service: "ReceiveAcl", repoId: route.doName }),
+      storageQuota
     );
   });
 }
