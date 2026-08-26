@@ -1,3 +1,11 @@
+import {
+  consumeRateLimit,
+  type RateLimitNamespace,
+  type RateLimitDecision,
+} from "./rate-limit";
+import { parseUserGroupLimits } from "../../../packages/contracts/src/index";
+export { RateLimitDurableObject } from "./rate-limit";
+
 const TRUSTED_USER_HEADERS = [
   "x-gitedge-user-id",
   "x-gitedge-user-email",
@@ -13,12 +21,16 @@ export interface GatewayEnv {
   AUTH: GatewayService;
   FORGE: GatewayService;
   GIT: GatewayService;
+  RATE_LIMITER: RateLimitNamespace;
+  IP_RPM_LIMIT?: string;
+  USER_GROUP_LIMITS_JSON?: string;
 }
 
 interface AuthenticatedSession {
   authenticated: true;
   userId: string;
   userName: string;
+  groupKey: string;
 }
 
 interface AnonymousSession {
@@ -28,7 +40,7 @@ interface AnonymousSession {
 type SessionResult = AuthenticatedSession | AnonymousSession;
 
 interface AuthSessionPayload {
-  data: { id: string; identifier: string } | null;
+  data: { id: string; identifier: string; groupKey?: string } | null;
 }
 
 function isSessionPayload(value: unknown): value is AuthSessionPayload {
@@ -45,7 +57,8 @@ function isSessionPayload(value: unknown): value is AuthSessionPayload {
       typeof value.data.id === "string" &&
       value.data.id.length > 0 &&
       typeof value.data.identifier === "string" &&
-      value.data.identifier.length > 0)
+      value.data.identifier.length > 0 &&
+      (!("groupKey" in value.data) || typeof value.data.groupKey === "string"))
   );
 }
 
@@ -92,6 +105,7 @@ async function readSession(response: Response): Promise<SessionResult | Response
     authenticated: true,
     userId: payload.data.id,
     userName: payload.data.identifier,
+    groupKey: payload.data.groupKey || "free",
   };
 }
 
@@ -115,13 +129,48 @@ function forwardServicePath(request: Request, prefix: string): Request {
   return withPath(request, servicePath);
 }
 
-function forwardForge(request: Request, session: AuthenticatedSession): Request {
+function forwardForge(request: Request, session?: AuthenticatedSession): Request {
   const headers = new Headers(request.headers);
   withoutTrustedHeaders(headers);
   headers.delete("Cookie");
-  headers.set("X-GitEdge-User-Id", session.userId);
-  headers.set("X-GitEdge-User-Name", session.userName);
+  if (session) {
+    headers.set("X-GitEdge-User-Id", session.userId);
+    headers.set("X-GitEdge-User-Name", session.userName);
+  }
   return new Request(forwardServicePath(request, "/api/forge"), { headers });
+}
+
+function parsePositiveLimit(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function rateLimitedResponse(decision: RateLimitDecision): Response | null {
+  if (decision.allowed) return null;
+  return Response.json(
+    { error: "Rate limit exceeded", retryAfter: decision.retryAfter },
+    { status: 429, headers: { "Retry-After": String(decision.retryAfter) } }
+  );
+}
+
+async function enforceIpLimit(request: Request, env: GatewayEnv): Promise<Response | null> {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const decision = await consumeRateLimit(
+    env.RATE_LIMITER,
+    `ip:${ip}`,
+    parsePositiveLimit(env.IP_RPM_LIMIT, 300)
+  );
+  return rateLimitedResponse(decision);
+}
+
+async function enforceUserLimit(session: AuthenticatedSession, env: GatewayEnv): Promise<Response | null> {
+  const limits = parseUserGroupLimits(env.USER_GROUP_LIMITS_JSON);
+  const decision = await consumeRateLimit(
+    env.RATE_LIMITER,
+    `user:${session.groupKey}:${session.userId}`,
+    limits[session.groupKey]?.rpm ?? limits.free.rpm
+  );
+  return rateLimitedResponse(decision);
 }
 
 async function serveSpa(request: Request, assets: GatewayService): Promise<Response> {
@@ -135,6 +184,12 @@ async function serveSpa(request: Request, assets: GatewayService): Promise<Respo
 export async function handleGatewayRequest(request: Request, env: GatewayEnv): Promise<Response> {
   const url = new URL(request.url);
 
+  const rateLimitPath = isApiPath(url.pathname, "/api") || isGitRequest(url.pathname);
+  if (rateLimitPath) {
+    const ipLimitResponse = await enforceIpLimit(request, env);
+    if (ipLimitResponse) return ipLimitResponse;
+  }
+
   if (isApiPath(url.pathname, "/api/auth")) {
     return env.AUTH.fetch(forwardServicePath(request, "/api/auth"));
   }
@@ -143,11 +198,16 @@ export async function handleGatewayRequest(request: Request, env: GatewayEnv): P
     const session = await authenticate(request, env.AUTH);
     if (session instanceof Response) return session;
     if (!session.authenticated) {
+      if (request.method === "GET" || request.method === "HEAD") {
+        return env.FORGE.fetch(forwardForge(request));
+      }
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { "Content-Type": "application/json; charset=utf-8" },
       });
     }
+    const userLimitResponse = await enforceUserLimit(session, env);
+    if (userLimitResponse) return userLimitResponse;
     return env.FORGE.fetch(forwardForge(request, session));
   }
 
