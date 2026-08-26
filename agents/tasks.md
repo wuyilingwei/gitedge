@@ -10,3 +10,4 @@
 | 002  |     [Feature] Vue 产品壳     |                 实现 Vue 3、i18n、授权入口与四类仓库协作页面                  |         建立“码锋”首批可操作产品界面         | ✅ 已完成 |
 | 003  | [Feature] 授权与 Forge 服务  |                 实现独立 Auth/Forge Worker、D1 schema 与 API                  |   多 Worker 服务需要真实授权和协作数据边界   | ✅ 已完成 |
 | 004  | [Feature] Gateway 与部署拓扑 |             实现公开 Gateway、Service Bindings 与 Git Worker 配置             |  让 Vue/Auth/Forge/Git 以可发布拓扑协同工作  | ✅ 已完成 |
+| 005  |   [Audit] 生产部署配置审查   |          以自动化测试审查唯一公开入口、服务绑定、共享资源与迁移声明           |    防止配置漂移暴露内部服务或连接错误资源    | ✅ 已完成 |
