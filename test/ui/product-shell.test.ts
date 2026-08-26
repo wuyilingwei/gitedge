@@ -39,6 +39,38 @@ describe("GitEdge API client", () => {
     );
   });
 
+  it("uses the owner and slug public Forge paths for anonymous repository reads", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => new Response(JSON.stringify({ data: [] }), { status: 200 })
+    );
+
+    await api.publicRepository("rosmontis", "edge");
+    await api.publicIssues("rosmontis", "edge");
+    await api.publicPulls("rosmontis", "edge");
+    await api.publicWiki("rosmontis", "edge");
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/forge/public/repositories/rosmontis/edge",
+      expect.objectContaining({ credentials: "include" })
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/forge/public/repositories/rosmontis/edge/issues",
+      expect.objectContaining({ credentials: "include" })
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      3,
+      "/api/forge/public/repositories/rosmontis/edge/pull-requests",
+      expect.objectContaining({ credentials: "include" })
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      4,
+      "/api/forge/public/repositories/rosmontis/edge/wiki",
+      expect.objectContaining({ credentials: "include" })
+    );
+  });
+
   it("translates UI fields into the Forge repository contract", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ data: { id: "repo-7" } }), { status: 201 })

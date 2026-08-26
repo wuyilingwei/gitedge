@@ -92,6 +92,48 @@ class RepositoryCreateDatabase implements D1Database {
   }
 }
 
+class PublicReadStatement implements D1PreparedStatement {
+  constructor(private readonly query: string) {}
+
+  bind(..._values: unknown[]): D1PreparedStatement {
+    return this;
+  }
+
+  first<T = unknown>(): Promise<T | null> {
+    if (this.query.includes("repositories.visibility = 'public'")) {
+      return Promise.resolve({
+        id: "repo-public",
+        namespace_id: "namespace-1",
+        owner: "rosmontis",
+        slug: "edge",
+        visibility: "public",
+        description: "Public edge repository",
+        created_at: 1,
+        updated_at: 2,
+      } as T);
+    }
+    return Promise.resolve(null);
+  }
+
+  all<T = unknown>(): Promise<D1Result<T>> {
+    return Promise.resolve({ results: [], meta: { changes: 0 } });
+  }
+
+  run(): Promise<D1Result> {
+    return Promise.resolve({ results: [], meta: { changes: 0 } });
+  }
+}
+
+class PublicReadDatabase implements D1Database {
+  prepare(query: string): D1PreparedStatement {
+    return new PublicReadStatement(query);
+  }
+
+  batch(_statements: readonly D1PreparedStatement[]): Promise<readonly D1Result[]> {
+    return Promise.resolve([]);
+  }
+}
+
 describe("service contracts", () => {
   it("normalizes repository slugs and rejects unsafe names", () => {
     expect(
@@ -147,6 +189,36 @@ describe("service contracts", () => {
         },
       ],
     });
+  });
+
+  it("allows anonymous reads only through an owner and slug public repository path", async () => {
+    const env = { DB: new PublicReadDatabase(), LOG_LEVEL: "error" };
+    const repository = await forgeWorker.fetch(
+      new Request("https://forge.internal/public/repositories/rosmontis/edge"),
+      env
+    );
+    const issues = await forgeWorker.fetch(
+      new Request("https://forge.internal/public/repositories/rosmontis/edge/issues"),
+      env
+    );
+    const write = await forgeWorker.fetch(
+      new Request("https://forge.internal/public/repositories/rosmontis/edge/issues", {
+        method: "POST",
+      }),
+      env
+    );
+    const privateRepository = await forgeWorker.fetch(
+      new Request("https://forge.internal/public/repositories/rosmontis/private"),
+      { DB: new FakeDatabase(), LOG_LEVEL: "error" }
+    );
+
+    expect(repository.status).toBe(200);
+    await expect(repository.json()).resolves.toMatchObject({
+      data: { owner: "rosmontis", slug: "edge", visibility: "public" },
+    });
+    expect(issues.status).toBe(200);
+    expect(write.status).toBe(401);
+    expect(privateRepository.status).toBe(404);
   });
 
   it("rejects invalid repository input before querying D1", async () => {

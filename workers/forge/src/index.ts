@@ -66,6 +66,18 @@ async function repositoryForUser(
     .first<RepositoryRow>();
 }
 
+async function publicRepositoryForOwnerAndSlug(
+  env: ForgeEnv,
+  owner: string,
+  slug: string
+): Promise<RepositoryRow | null> {
+  return env.DB.prepare(
+    "SELECT repositories.id, repositories.namespace_id, namespaces.slug AS owner, repositories.slug, repositories.visibility, repositories.description, repositories.created_at, repositories.updated_at FROM repositories JOIN namespaces ON namespaces.id = repositories.namespace_id WHERE namespaces.slug = ? AND repositories.slug = ? AND repositories.visibility = 'public'"
+  )
+    .bind(owner, slug)
+    .first<RepositoryRow>();
+}
+
 async function nextNumber(
   env: ForgeEnv,
   table: "forge_issues" | "forge_pull_requests",
@@ -94,13 +106,63 @@ function repoResponse(row: RepositoryRow) {
   };
 }
 
+async function publicRepositoryRead(env: ForgeEnv, parts: string[]): Promise<Response> {
+  const owner = parts[2];
+  const slug = parts[3];
+  if (!owner || !slug) return error(404, "not_found", "Endpoint was not found.");
+
+  const repository = await publicRepositoryForOwnerAndSlug(env, owner, slug);
+  if (!repository) return error(404, "not_found", "Repository was not found.");
+  if (parts.length === 4) return json({ data: repoResponse(repository) });
+
+  const resource = parts[4];
+  if (resource === "issues" && parts.length === 5) {
+    const rows = await env.DB.prepare(
+      "SELECT forge_issues.id, forge_issues.number, users.identifier AS author, forge_issues.title, forge_issues.body, forge_issues.state, forge_issues.created_at AS createdAt, forge_issues.updated_at AS updatedAt FROM forge_issues JOIN users ON users.id = forge_issues.author_id WHERE forge_issues.repository_id = ? ORDER BY forge_issues.number DESC"
+    )
+      .bind(repository.id)
+      .all();
+    return json({ data: rows.results });
+  }
+  if (resource === "pull-requests" && parts.length === 5) {
+    const rows = await env.DB.prepare(
+      "SELECT forge_pull_requests.id, forge_pull_requests.number, users.identifier AS author, forge_pull_requests.title, forge_pull_requests.body, forge_pull_requests.base_ref AS baseRef, forge_pull_requests.head_ref AS headRef, forge_pull_requests.state, forge_pull_requests.created_at AS createdAt, forge_pull_requests.updated_at AS updatedAt FROM forge_pull_requests JOIN users ON users.id = forge_pull_requests.author_id WHERE forge_pull_requests.repository_id = ? ORDER BY forge_pull_requests.number DESC"
+    )
+      .bind(repository.id)
+      .all();
+    return json({ data: rows.results });
+  }
+  if (resource === "wiki" && parts.length === 5) {
+    const rows = await env.DB.prepare(
+      "SELECT slug, title, revision, updated_by AS updatedBy, updated_at AS updatedAt FROM forge_wiki_pages WHERE repository_id = ? ORDER BY slug ASC"
+    )
+      .bind(repository.id)
+      .all();
+    return json({ data: rows.results });
+  }
+  if (resource === "wiki" && parts.length === 6) {
+    const page = await env.DB.prepare(
+      "SELECT slug, title, content, revision, updated_by AS updatedBy, updated_at AS updatedAt FROM forge_wiki_pages WHERE repository_id = ? AND slug = ?"
+    )
+      .bind(repository.id, parts[5])
+      .first();
+    return page ? json({ data: page }) : error(404, "not_found", "Wiki page was not found.");
+  }
+  return error(404, "not_found", "Endpoint was not found.");
+}
+
 export default {
   async fetch(request: Request, env: ForgeEnv): Promise<Response> {
-    const user = trustedUser(request);
-    if (!user) return error(401, "unauthorized", "Trusted user context is required.");
     const logger = createLogger(env.LOG_LEVEL, { service: "forge" });
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean);
+
+    if (request.method === "GET" && parts[0] === "public" && parts[1] === "repositories") {
+      return publicRepositoryRead(env, parts);
+    }
+
+    const user = trustedUser(request);
+    if (!user) return error(401, "unauthorized", "Trusted user context is required.");
 
     if (request.method === "GET" && url.pathname === "/repositories") {
       const rows = await env.DB.prepare(
