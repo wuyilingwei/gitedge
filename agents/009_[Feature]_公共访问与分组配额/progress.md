@@ -13,3 +13,4 @@
 - 生产浏览器验证：中文“码锋”首页、匿名代码页、Issues、Pull Requests 与 Wiki 均可用，私有仓库显示通用失败状态。
 - 生产 Git Smart HTTP 验证：公开仓库 upload-pack discovery 返回 200 及正确 content-type，私有仓库返回 404。
 - 两轮临时 QA 账号、仓库、KV 路由、session/cookie 均已按精确 ID 清理，D1 复查剩余账号与仓库数均为 0。
+- GitHub 确认 main 未保护；功能分支已以 `faf31f6` 合并并推送到 `origin/main`。
