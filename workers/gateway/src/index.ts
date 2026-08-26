@@ -1,8 +1,4 @@
-import {
-  consumeRateLimit,
-  type RateLimitNamespace,
-  type RateLimitDecision,
-} from "./rate-limit";
+import { consumeRateLimit, type RateLimitNamespace, type RateLimitDecision } from "./rate-limit";
 import { parseUserGroupLimits } from "../../../packages/contracts/src/index";
 export { RateLimitDurableObject } from "./rate-limit";
 
@@ -10,6 +6,7 @@ const TRUSTED_USER_HEADERS = [
   "x-gitedge-user-id",
   "x-gitedge-user-email",
   "x-gitedge-user-name",
+  "x-gitedge-user-group",
 ] as const;
 
 export interface GatewayService {
@@ -40,7 +37,7 @@ interface AnonymousSession {
 type SessionResult = AuthenticatedSession | AnonymousSession;
 
 interface AuthSessionPayload {
-  data: { id: string; identifier: string; groupKey?: string } | null;
+  data: { id: string; identifier: string; groupKey: string } | null;
 }
 
 function isSessionPayload(value: unknown): value is AuthSessionPayload {
@@ -58,7 +55,9 @@ function isSessionPayload(value: unknown): value is AuthSessionPayload {
       value.data.id.length > 0 &&
       typeof value.data.identifier === "string" &&
       value.data.identifier.length > 0 &&
-      (!("groupKey" in value.data) || typeof value.data.groupKey === "string"))
+      "groupKey" in value.data &&
+      typeof value.data.groupKey === "string" &&
+      value.data.groupKey.length > 0)
   );
 }
 
@@ -105,7 +104,7 @@ async function readSession(response: Response): Promise<SessionResult | Response
     authenticated: true,
     userId: payload.data.id,
     userName: payload.data.identifier,
-    groupKey: payload.data.groupKey || "free",
+    groupKey: payload.data.groupKey,
   };
 }
 
@@ -136,6 +135,7 @@ function forwardForge(request: Request, session?: AuthenticatedSession): Request
   if (session) {
     headers.set("X-GitEdge-User-Id", session.userId);
     headers.set("X-GitEdge-User-Name", session.userName);
+    headers.set("X-GitEdge-User-Group", session.groupKey);
   }
   return new Request(forwardServicePath(request, "/api/forge"), { headers });
 }
@@ -163,7 +163,10 @@ async function enforceIpLimit(request: Request, env: GatewayEnv): Promise<Respon
   return rateLimitedResponse(decision);
 }
 
-async function enforceUserLimit(session: AuthenticatedSession, env: GatewayEnv): Promise<Response | null> {
+async function enforceUserLimit(
+  session: AuthenticatedSession,
+  env: GatewayEnv
+): Promise<Response | null> {
   const limits = parseUserGroupLimits(env.USER_GROUP_LIMITS_JSON);
   const decision = await consumeRateLimit(
     env.RATE_LIMITER,

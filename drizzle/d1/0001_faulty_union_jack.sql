@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `group_key` text DEFAULT 'free' NOT NULL;

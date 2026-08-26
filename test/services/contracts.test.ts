@@ -48,7 +48,8 @@ class FakeDatabase implements D1Database {
 class RepositoryCreateStatement implements D1PreparedStatement {
   constructor(
     private readonly query: string,
-    private readonly deletedRepositories: string[]
+    private readonly deletedRepositories: string[],
+    private readonly repositoryCount: number
   ) {}
 
   bind(...values: unknown[]): D1PreparedStatement {
@@ -59,6 +60,9 @@ class RepositoryCreateStatement implements D1PreparedStatement {
   }
 
   first<T = unknown>(): Promise<T | null> {
+    if (this.query.includes("COUNT(*) AS count")) {
+      return Promise.resolve({ count: this.repositoryCount } as T);
+    }
     if (this.query.includes("SELECT id FROM namespaces")) {
       return Promise.resolve({ id: "namespace-1" } as T);
     }
@@ -83,8 +87,10 @@ class RepositoryCreateStatement implements D1PreparedStatement {
 class RepositoryCreateDatabase implements D1Database {
   readonly deletedRepositories: string[] = [];
 
+  constructor(private readonly repositoryCount = 0) {}
+
   prepare(query: string): D1PreparedStatement {
-    return new RepositoryCreateStatement(query, this.deletedRepositories);
+    return new RepositoryCreateStatement(query, this.deletedRepositories, this.repositoryCount);
   }
 
   batch(_statements: readonly D1PreparedStatement[]): Promise<readonly D1Result[]> {
@@ -168,7 +174,11 @@ describe("service contracts", () => {
 
     const accepted = await forgeWorker.fetch(
       new Request("https://forge.internal/repositories", {
-        headers: { "X-GitEdge-User-Id": "user-1", "X-GitEdge-User-Name": "rosmontis" },
+        headers: {
+          "X-GitEdge-User-Id": "user-1",
+          "X-GitEdge-User-Name": "rosmontis",
+          "X-GitEdge-User-Group": "free",
+        },
       }),
       env
     );
@@ -230,6 +240,7 @@ describe("service contracts", () => {
           "Content-Type": "application/json",
           "X-GitEdge-User-Id": "user-1",
           "X-GitEdge-User-Name": "rosmontis",
+          "X-GitEdge-User-Group": "free",
         },
         body: JSON.stringify({ slug: "../escape", visibility: "private" }),
       }),
@@ -261,6 +272,7 @@ describe("service contracts", () => {
           "Content-Type": "application/json",
           "X-GitEdge-User-Id": "user-1",
           "X-GitEdge-User-Name": "rosmontis",
+          "X-GitEdge-User-Group": "free",
         },
         body: JSON.stringify({ slug: "edge", visibility: "public", description: "" }),
       }),
@@ -275,5 +287,30 @@ describe("service contracts", () => {
       doName: expect.stringMatching(/^repo:/),
     });
     expect(database.deletedRepositories).toEqual([]);
+  });
+
+  it("rejects repository creation when the user group repository limit is reached", async () => {
+    const response = await forgeWorker.fetch(
+      new Request("https://forge.internal/repositories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-GitEdge-User-Id": "user-1",
+          "X-GitEdge-User-Name": "rosmontis",
+          "X-GitEdge-User-Group": "free",
+        },
+        body: JSON.stringify({ slug: "blocked", visibility: "public", description: "" }),
+      }),
+      {
+        DB: new RepositoryCreateDatabase(10),
+        LOG_LEVEL: "error",
+        ROUTES: { put: async () => {} },
+      }
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "forbidden", message: "Repository limit reached for this user group." },
+    });
   });
 });

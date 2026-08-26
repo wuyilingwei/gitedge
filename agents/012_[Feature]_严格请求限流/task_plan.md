@@ -4,4 +4,4 @@
 - [x] 实现 SQLite-backed Durable Object、SHA-256 分片与滚动窗口 RPC
 - [x] 将限流接入动态 API 与 Git Smart HTTP，并保留匿名 Forge GET
 - [x] 增加 Gateway 定向测试，执行测试、类型检查与部署 dry-run
-- [ ] 检查变更范围并提交
+- [x] 检查变更范围并提交

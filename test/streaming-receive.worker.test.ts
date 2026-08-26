@@ -627,6 +627,86 @@ describe("streaming receive-pack", () => {
     expect(retryPush.commitOid).not.toBe(seeded.nextCommit.oid);
   });
 
+  it("rejects a streamed pack above the configured group push limit and cleans up", async () => {
+    const owner = "o";
+    const repo = uniqueRepoId("stream-receive-push-limit");
+    await setupRepoForTests(env, owner, repo);
+    const repoId = `${owner}/${repo}`;
+    const seeded = await seedPackFirstRepo(repoId);
+    const push = await buildStreamingReceiveBody({
+      parentOid: seeded.nextCommit.oid,
+      nextText: "over the push limit\n",
+      commitMessage: "push limit",
+      capabilities: "report-status ofs-delta agent=test",
+    });
+    const request = new Request(`https://example.com/${owner}/${repo}/git-receive-pack`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-git-receive-pack-request" },
+      body: streamBody(push.body),
+    });
+
+    const response = await handleStreamingReceivePackPOST(
+      env,
+      repoId,
+      request,
+      createExecutionContext(),
+      {
+        storageQuota: {
+          ownerUserId: "owner-1",
+          groupKey: "free",
+          maxPushBytes: 1,
+          maxRepositoryBytes: 1_073_741_824,
+          maxStorageBytes: 5_368_709_120,
+        },
+      }
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.text()).toContain("Push pack exceeds");
+    expect(await listStagedReceivePacks(repoId)).toEqual([]);
+    const activity = await callStubWithRetry(seeded.getStub, (stub) => stub.getRepoActivity());
+    expect(activity).toBeNull();
+  });
+
+  it("rejects a push when physical repository storage exceeds its group limit", async () => {
+    const owner = "o";
+    const repo = uniqueRepoId("stream-receive-repository-limit");
+    const repository = await setupRepoForTests(env, owner, repo);
+    const repoId = `${owner}/${repo}`;
+    const seeded = await seedPackFirstRepo(repoId);
+    const push = await buildStreamingReceiveBody({
+      parentOid: seeded.nextCommit.oid,
+      nextText: "over repository storage\n",
+      commitMessage: "repository storage limit",
+      capabilities: "report-status ofs-delta agent=test",
+    });
+    const response = await handleStreamingReceivePackPOST(
+      env,
+      repoId,
+      new Request(`https://example.com/${owner}/${repo}/git-receive-pack`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-git-receive-pack-request" },
+        body: streamBody(push.body),
+      }),
+      createExecutionContext(),
+      {
+        storageQuota: {
+          ownerUserId: repository.userId,
+          groupKey: "free",
+          maxPushBytes: 268_435_456,
+          maxRepositoryBytes: 1,
+          maxStorageBytes: 5_368_709_120,
+        },
+      }
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.text()).toContain("Repository storage exceeds");
+    expect(await listStagedReceivePacks(repoId)).toEqual([]);
+    const refs = await callStubWithRetry(seeded.getStub, (stub) => stub.listRefs());
+    expect(refs.find((ref) => ref.name === "refs/heads/main")?.oid).toBe(seeded.nextCommit.oid);
+  });
+
   it("returns 503 when a streaming receive lease is already active", async () => {
     const owner = "o";
     const repo = uniqueRepoId("stream-receive-busy");

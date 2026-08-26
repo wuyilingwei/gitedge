@@ -82,7 +82,8 @@ export function parseUserGroupLimits(value: string | undefined): Record<string, 
         "maxStorageBytes",
       ] as const) {
         const next = raw[field];
-        if (typeof next === "number" && Number.isSafeInteger(next) && next > 0) candidate[field] = next;
+        if (typeof next === "number" && Number.isSafeInteger(next) && next > 0)
+          candidate[field] = next;
       }
       result[groupKey] = candidate;
     }

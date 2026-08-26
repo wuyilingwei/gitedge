@@ -3,6 +3,7 @@ import type { Logger } from "@/worker/common/logger";
 import type { RepoDurableObject } from "@/worker/do";
 import type { PackCatalogRow } from "@/worker/do/repo/db/schema";
 import type { ReceiveStatus } from "@/worker/git/operations/validation";
+import type { RepositoryStorageQuota } from "@/worker/git/quota/storage";
 
 import { clientAbortedResponse, createLogger, getRepoStub } from "@/worker/common";
 import {
@@ -156,6 +157,7 @@ function createSidebandReceiveResponse(args: {
   packStream: ReadableStream<Uint8Array>;
   bytesConsumed: number;
   onRepoStateChanged?: RepoStateChangeHandler | undefined;
+  storageQuota?: RepositoryStorageQuota;
 }): Response {
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -187,6 +189,7 @@ function createSidebandReceiveResponse(args: {
           limiter: args.limiter,
           countSubrequest: (op, n = 1) => countReceiveSubrequest(args.cacheCtx, args.log, op, n),
           onProgress,
+          storageQuota: args.storageQuota,
         });
 
         scheduleRepoStateChange(args.ctx, args.onRepoStateChanged, {
@@ -238,6 +241,7 @@ export async function handleStreamingReceivePackPOST(
   ctx: ExecutionContext,
   options?: {
     onRepoStateChanged?: RepoStateChangeHandler | undefined;
+    storageQuota?: RepositoryStorageQuota;
   }
 ): Promise<Response> {
   const stub = getRepoStub(env, repoId);
@@ -327,6 +331,7 @@ export async function handleStreamingReceivePackPOST(
         packStream,
         bytesConsumed,
         onRepoStateChanged: options?.onRepoStateChanged,
+        storageQuota: options?.storageQuota,
       });
     }
 
@@ -346,6 +351,7 @@ export async function handleStreamingReceivePackPOST(
       cacheCtx,
       limiter,
       countSubrequest: (op, n = 1) => countReceiveSubrequest(cacheCtx, log, op, n),
+      storageQuota: options?.storageQuota,
     });
 
     scheduleRepoStateChange(ctx, options?.onRepoStateChanged, {

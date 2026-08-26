@@ -69,9 +69,12 @@ describe("Gateway routing", () => {
       environment({
         auth: service(
           () =>
-            new Response(JSON.stringify({ data: { id: "user-1", identifier: "Rosmontis" } }), {
-              headers: { "Content-Type": "application/json" },
-            })
+            new Response(
+              JSON.stringify({
+                data: { id: "user-1", identifier: "Rosmontis", groupKey: "team" },
+              }),
+              { headers: { "Content-Type": "application/json" } }
+            )
         ),
         forge: service((request) => {
           received = request;
@@ -83,6 +86,7 @@ describe("Gateway routing", () => {
     expect(response.status).toBe(200);
     expect(received?.headers.get("X-GitEdge-User-Id")).toBe("user-1");
     expect(received?.headers.get("X-GitEdge-User-Name")).toBe("Rosmontis");
+    expect(received?.headers.get("X-GitEdge-User-Group")).toBe("team");
     expect(received?.headers.get("Cookie")).toBeNull();
     expect(new URL(received?.url ?? "https://invalid").pathname).toBe("/repositories");
   });

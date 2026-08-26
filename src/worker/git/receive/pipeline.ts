@@ -11,7 +11,18 @@ import {
   scanPack,
 } from "@/worker/git/pack/indexer";
 import { doPrefix, r2PackKey } from "@/worker/keys";
-import { deleteStagedPack, stagePackToR2, type StagedPackUpload } from "./r2Upload";
+import {
+  assertStorageQuota,
+  GitStorageQuotaError,
+  measureStorageUsage,
+  type RepositoryStorageQuota,
+} from "@/worker/git/quota/storage";
+import {
+  deleteStagedPack,
+  PackSizeLimitError,
+  stagePackToR2,
+  type StagedPackUpload,
+} from "./r2Upload";
 import { buildReceiveReportStatus, isReceiveAbort, throwIfReceiveAborted } from "./support";
 
 type RepoStub = DurableObjectStub<RepoDurableObject>;
@@ -166,6 +177,7 @@ type ExecuteReceivePipelineArgs = {
   limiter: SubrequestLimiter;
   countSubrequest(op: string, n?: number): void;
   onProgress?: (message: string) => void;
+  storageQuota?: RepositoryStorageQuota;
 };
 
 function buildReceiveResult(args: {
@@ -222,6 +234,7 @@ export async function executeReceivePipeline(
         limiter: args.limiter,
         countSubrequest: args.countSubrequest,
         onProgress: args.onProgress,
+        maxBytes: args.storageQuota?.maxPushBytes,
       });
       throwIfReceiveAborted(args.request, args.log, "stage-pack");
 
@@ -252,6 +265,17 @@ export async function executeReceivePipeline(
         onProgress: args.onProgress,
       });
       throwIfReceiveAborted(args.request, args.log, "resolve-pack");
+
+      if (args.storageQuota) {
+        const usage = await measureStorageUsage({
+          env: args.env,
+          ownerUserId: args.storageQuota.ownerUserId,
+          repositoryDoName: args.repoId,
+          limiter: args.limiter,
+          countSubrequest: args.countSubrequest,
+        });
+        assertStorageQuota(usage, args.storageQuota);
+      }
 
       const connectivityStatuses = args.commands.map((command) => ({
         ref: command.ref,
@@ -382,6 +406,12 @@ export async function executeReceivePipeline(
       log: args.log,
       reason: aborted ? "receive-aborted" : "receive-error",
     });
+    if (error instanceof PackSizeLimitError) {
+      throw new ReceivePipelineHttpError(413, "push-size-limit", error.message);
+    }
+    if (error instanceof GitStorageQuotaError) {
+      throw new ReceivePipelineHttpError(413, error.reason, error.message);
+    }
     throw error;
   }
 }

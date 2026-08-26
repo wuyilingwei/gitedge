@@ -5,6 +5,7 @@ import {
   PutWikiPageInputSchema,
   UpdateIssueInputSchema,
   UpdatePullRequestInputSchema,
+  parseUserGroupLimits,
   repositoryRouteCacheKey,
   type TrustedUser,
 } from "../../../packages/contracts/src/index";
@@ -16,6 +17,7 @@ type ForgeEnv = {
     put(key: string, value: string): Promise<void>;
   };
   readonly LOG_LEVEL?: string;
+  readonly USER_GROUP_LIMITS_JSON?: string;
 };
 type RepositoryRow = {
   id: string;
@@ -51,7 +53,8 @@ async function parseJson(request: Request): Promise<unknown> {
 function trustedUser(request: Request): TrustedUser | null {
   const id = request.headers.get("X-GitEdge-User-Id");
   const identifier = request.headers.get("X-GitEdge-User-Name");
-  return id && identifier ? { id, identifier } : null;
+  const groupKey = request.headers.get("X-GitEdge-User-Group");
+  return id && identifier && groupKey ? { id, identifier, groupKey } : null;
 }
 
 async function repositoryForUser(
@@ -175,6 +178,16 @@ export default {
     if (request.method === "POST" && url.pathname === "/repositories") {
       const parsed = CreateRepositoryInputSchema.safeParse(await parseJson(request));
       if (!parsed.success) return error(400, "bad_request", "Invalid repository payload.");
+      const limits = parseUserGroupLimits(env.USER_GROUP_LIMITS_JSON);
+      const groupLimits = limits[user.groupKey] ?? limits.free;
+      const repositoryCount = await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM repositories WHERE created_by = ?"
+      )
+        .bind(user.id)
+        .first<{ count: number }>();
+      if ((repositoryCount?.count ?? 0) >= groupLimits.maxRepositories) {
+        return error(403, "forbidden", "Repository limit reached for this user group.");
+      }
       const namespace = await env.DB.prepare(
         "SELECT id FROM namespaces WHERE created_by = ? ORDER BY created_at ASC LIMIT 1"
       )
