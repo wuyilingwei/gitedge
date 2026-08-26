@@ -11,6 +11,15 @@ export const workerConfigs = [
 
 const unresolvedIdPattern = /REPLACE_WITH_[A-Z0-9_]+/;
 
+function cloudflareEnvironment() {
+  const authConfig = JSON.parse(readFileSync(workerConfigs[0], "utf8"));
+  if (!/^[a-f0-9]{32}$/.test(authConfig.account_id ?? "")) {
+    throw new Error("Auth Worker must declare a valid production account_id.");
+  }
+
+  return { ...process.env, CLOUDFLARE_ACCOUNT_ID: authConfig.account_id };
+}
+
 export function findUnresolvedResourceIds(configPaths = workerConfigs) {
   const findings = [];
 
@@ -35,8 +44,11 @@ function assertProductionResourceIds() {
   return false;
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, { stdio: "inherit" });
+function run(command, args, { cloudflare = false } = {}) {
+  const result = spawnSync(command, args, {
+    stdio: "inherit",
+    env: cloudflare ? cloudflareEnvironment() : process.env,
+  });
   if (result.error) {
     console.error(`Command failed to start: ${command}`);
     process.exitCode = 1;
@@ -56,16 +68,20 @@ export function deployStack({ dryRun = false } = {}) {
 
   if (!dryRun) {
     if (
-      !run("npx", [
-        "wrangler",
-        "d1",
-        "migrations",
-        "apply",
-        "gitedge",
-        "--remote",
-        "--config",
-        "workers/auth/wrangler.jsonc",
-      ])
+      !run(
+        "npx",
+        [
+          "wrangler",
+          "d1",
+          "migrations",
+          "apply",
+          "gitedge",
+          "--remote",
+          "--config",
+          "workers/auth/wrangler.jsonc",
+        ],
+        { cloudflare: true }
+      )
     ) {
       return false;
     }
@@ -74,7 +90,7 @@ export function deployStack({ dryRun = false } = {}) {
   for (const service of ["auth", "forge", "git", "gateway"]) {
     const args = ["wrangler", "deploy", "--config", `workers/${service}/wrangler.jsonc`];
     if (dryRun) args.push("--dry-run");
-    if (!run("npx", args)) return false;
+    if (!run("npx", args, { cloudflare: true })) return false;
   }
 
   return true;

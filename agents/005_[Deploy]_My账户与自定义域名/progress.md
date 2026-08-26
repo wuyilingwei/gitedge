@@ -11,3 +11,4 @@
 - 合并配置与对抗审查子任务，解决审计编号冲突；写入实际 D1/KV ID，并把 Wrangler 升至 4.126.0。
 - 通过 78 项单元测试、6 项 Vue 测试、320 项 Worker 集成测试、四 Worker typecheck/启动分析、Vue 生产构建与完整四服务 dry-run。
 - 通过本任务文件 Prettier、diff whitespace 与禁止关键词检查；全仓库 Prettier 仍有未触及的存量差异。
+- 远端 migrations list 首次因 Wrangler 多账户选择失败且未产生变更；为部署脚本加入从 Auth 配置派生的显式账户环境，单元测试与完整 dry-run 再次通过。

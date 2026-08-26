@@ -12,3 +12,4 @@
 - [`npm audit` 报告 4 个 moderate] -> [检查完整依赖路径与建议修复] -> [均来自仅开发使用的 `drizzle-kit` 旧 esbuild 工具链，审计建议反而降级至 0.18.1；不进入生产 Worker bundle，不执行破坏性降级]
 - [全仓库 Prettier 检查] -> [发现 12 个本任务未涉及的存量文件和 2 个本任务文件格式差异] -> [只格式化本任务涉及文件并通过定向 Prettier、`git diff --check` 与提交关键词扫描，保留无关用户文件]
 - [Worker 集成测试结束期告警] -> [320 项全部通过且进程退出码为 0，但运行器清理时输出 `Network connection lost`] -> [作为测试运行器清理期告警记录，不冒充无告警结果]
+- [D1 migrations 在多账户 OAuth 下忽略配置中的 account 选择] -> [首次只读 migrations list 以未选账户失败，D1 list 则正确定位 `My`] -> [部署脚本从 Auth 配置读取并校验 account ID，仅向 Wrangler 子进程显式传入 `CLOUDFLARE_ACCOUNT_ID`，再次 dry-run 通过]
