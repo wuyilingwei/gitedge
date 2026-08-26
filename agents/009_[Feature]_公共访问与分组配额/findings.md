@@ -5,3 +5,5 @@
 - [Cloudflare Rate Limiting binding 的一致性] -> [对照当前官方文档] -> [binding 按数据中心局部、宽松且最终一致，不适合“严格 RPM”；改用 SQLite Durable Object 序列化滚动 60 秒窗口]
 - [存储配额的计量口径] -> [检查 receive-pack、压缩与清理路径] -> [按 R2 物理对象字节计量 pack、idx、refs 与 loose objects，避免只统计活跃 pack 而遗漏尚未清理的对象]
 - [配额归属] -> [检查 PAT 授权和仓库 created_by] -> [push 限制按仓库所有者用户组执行，防止协作者 PAT 改变或绕过仓库存储策略]
+- [生产限流验收边界] -> [组合严格窗口单元测试、Gateway dry-run 和生产 DO binding 部署证据] -> [没有对真实用户出口 IP 故意发送 301 次请求，避免造成 60 秒真实封禁]
+- [main 分支保护] -> [GitHub 认证 API 查询] -> [返回 Branch not protected，按项目交付规则直接合并并推送 main]

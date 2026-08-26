@@ -8,5 +8,5 @@
 - [x] 在 Git receive-pack 强制单次写入、单仓库与用户总存储配额
 - [x] 用按 IP 分片的 Durable Object 在 Gateway 强制动态请求严格 RPM
 - [x] 补充根目录测试、类型生成、类型检查、构建、启动分析与部署 dry-run
-- [ ] 应用远端 migration，部署四 Worker 并完成生产匿名/注册/限流/配额验收
+- [x] 应用远端 migration，部署四 Worker 并完成生产匿名/注册/限流/配额验收
 - [ ] 更新审计，检查 main 保护，合并推送并停止进度监控
