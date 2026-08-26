@@ -1,6 +1,6 @@
 # GitEdge / 码锋 项目索引
 
-> 最后更新：2026-08-24
+> 最后更新：2026-08-26
 
 ## 项目目标
 
@@ -37,4 +37,6 @@ GitEdge（中文名“码锋”）是部署在 Cloudflare 边缘平台上的 Git
 
 ## 当前交付边界
 
-本轮交付的是可构建、可测试、可部署的多 Worker 产品框架、授权入口与首批协作功能垂直切片。完整权限模型和 GC Container 不在本轮伪装为成品；Git transport 优先复用经验证的 MIT 上游实现，不从零重写协议。
+生产站点为 `https://gitedge.wuyilingwei.com`，仅 Gateway 通过 Custom Domain 公开；Auth、Forge 与 Git Worker 关闭 `workers.dev`，只通过 Service Bindings 接入。生产资源为 D1 `gitedge`、KV `gitedge-routes`、R2 `gitedge-git-repos` 与 Queue `gitedge-git-repo-maint`。
+
+本轮交付的是已上线的多 Worker 产品框架、授权入口与仓库、Issue、Pull Request、Wiki 首批垂直切片。完整权限模型和 GC Container 不在本轮伪装为成品；Git transport 优先复用经验证的 MIT 上游实现，不从零重写协议。

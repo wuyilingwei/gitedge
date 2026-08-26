@@ -1,18 +1,19 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "gitedge-forge",
+  "account_id": "df4481f3ce1fa0394b4617442a97d147",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-24",
+  "compatibility_date": "2026-08-26",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "d1_databases": [{
     "binding": "DB",
     "database_name": "gitedge",
-    "database_id": "REPLACE_WITH_SHARED_D1_DATABASE_ID",
+    "database_id": "c9a00d9d-db41-494e-b096-55b8b6bfe3a9",
     "migrations_dir": "../../migrations"
   }],
   "kv_namespaces": [
-    { "binding": "ROUTES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+    { "binding": "ROUTES", "id": "ece920cc5b2b4d4ca8972716ee16e4b4" }
   ],
   "observability": { "enabled": true }
 }
