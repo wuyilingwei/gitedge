@@ -9,5 +9,5 @@
 - [x] 应用远端 D1 migration 并按内部服务优先顺序部署四 Worker
 - [x] 验证内部 Worker 无公开入口且自定义域名只指向 Gateway
 - [x] 在部署站点完成授权、仓库、Issue、PR、Wiki、i18n、退出与 Git discovery 验收
-- [ ] 更新项目与审计记录，检查 main 保护并交付远端
-- [ ] 停止部署期间的子 agent 监控
+- [x] 更新项目与审计记录，检查 main 保护并交付远端
+- [x] 停止部署期间的子 agent 监控

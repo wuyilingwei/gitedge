@@ -17,3 +17,5 @@
 - 发布 Auth 修复后，生产注册、session、仓库、Issue、PR、Wiki、登出/登录和公开空仓库 Git discovery 全部通过。
 - 删除临时 QA 的 KV 路由键与 D1 user/namespace/repository/Issue/PR/Wiki/session 数据，并以精确 ID 查询确认清零。
 - 浏览器可视化验收被当前局域网 DNS 的空响应阻塞；公共与权威 DNS、TLS 和边缘 HTTP 均已验证正常。
+- GitHub `main` 无 branch protection 或 ruleset；任务分支已本地合并并推送至远端 `main`，合并提交为 `b07b1aa`。
+- 删除 15 分钟部署进度 heartbeat，部署任务审计收尾完成。
