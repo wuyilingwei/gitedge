@@ -25,6 +25,10 @@
       {
         "name": "REPO_DO",
         "class_name": "RepoDurableObject"
+      },
+      {
+        "name": "RATE_LIMITER",
+        "class_name": "SharedRateLimitDurableObject"
       }
     ]
   },
@@ -45,6 +49,12 @@
       "tag": "v3",
       "deleted_classes": [
         "AuthDurableObject"
+      ]
+    },
+    {
+      "tag": "v4",
+      "new_sqlite_classes": [
+        "SharedRateLimitDurableObject"
       ]
     }
   ],

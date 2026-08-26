@@ -33,15 +33,22 @@ interface WorkerConfig {
   services?: Array<{ binding: string; service: string }>;
   workers_dev?: boolean;
   vars?: Record<string, string>;
-  durable_objects?: { bindings: Array<{ name: string; class_name: string }> };
-  migrations?: Array<{ tag: string; new_sqlite_classes: string[] }>;
+  durable_objects?: {
+    bindings: Array<{ name: string; class_name: string; script_name?: string }>;
+  };
+  migrations?: Array<{
+    tag: string;
+    new_sqlite_classes?: string[];
+    deleted_classes?: string[];
+    renamed_classes?: Array<{ from: string; to: string }>;
+  }>;
 }
 
 const targetAccountId = "df4481f3ce1fa0394b4617442a97d147";
 const targetDomain = "gitedge.wuyilingwei.com";
 const targetD1Id = "c9a00d9d-db41-494e-b096-55b8b6bfe3a9";
 const targetKvId = "ece920cc5b2b4d4ca8972716ee16e4b4";
-const serviceNames = ["auth", "forge", "git", "gateway"] as const;
+const serviceNames = ["limits", "auth", "forge", "git", "gateway"] as const;
 
 function readWorkerConfig(service: (typeof serviceNames)[number]): WorkerConfig {
   const configPath = new URL(`../workers/${service}/wrangler.jsonc`, import.meta.url);
@@ -74,7 +81,7 @@ describe("production deployment configuration", () => {
     expect(gateway.workers_dev).toBe(false);
     expect(gateway.routes).toEqual([{ pattern: targetDomain, custom_domain: true }]);
 
-    for (const service of ["auth", "forge", "git"] as const) {
+    for (const service of ["limits", "auth", "forge", "git"] as const) {
       expect(configs[service].workers_dev).toBe(false);
       expect(configs[service].routes).toBeUndefined();
     }
@@ -128,11 +135,29 @@ describe("production deployment configuration", () => {
       admin: { rpm: 1200, maxRepositories: 1000 },
     });
     expect(configs.gateway.vars?.IP_RPM_LIMIT).toBe("300");
-    expect(configs.gateway.durable_objects?.bindings).toEqual([
-      { name: "RATE_LIMITER", class_name: "RateLimitDurableObject" },
+    expect(configs.limits.durable_objects?.bindings).toEqual([
+      { name: "RATE_LIMITER", class_name: "SharedRateLimitDurableObject" },
+    ]);
+    expect(configs.limits.migrations).toEqual([
+      { tag: "v1", new_sqlite_classes: ["RateLimitDurableObject"] },
+      {
+        tag: "v2",
+        renamed_classes: [{ from: "RateLimitDurableObject", to: "SharedRateLimitDurableObject" }],
+      },
+    ]);
+    const externalLimiter = {
+      name: "RATE_LIMITER",
+      class_name: "SharedRateLimitDurableObject",
+      script_name: "gitedge-limits",
+    };
+    expect(configs.gateway.durable_objects?.bindings).toEqual([externalLimiter]);
+    expect(configs.git.durable_objects?.bindings).toEqual([
+      { name: "REPO_DO", class_name: "RepoDurableObject" },
+      externalLimiter,
     ]);
     expect(configs.gateway.migrations).toEqual([
       { tag: "v1", new_sqlite_classes: ["RateLimitDurableObject"] },
+      { tag: "v2", deleted_classes: ["RateLimitDurableObject"] },
     ]);
   });
 
@@ -169,7 +194,9 @@ describe("production deployment configuration", () => {
 
     expect(deployScript).toContain('"gitedge"');
     expect(deployScript).toContain('"workers/auth/wrangler.jsonc"');
-    expect(deployScript).toContain('for (const service of ["auth", "forge", "git", "gateway"])');
+    expect(deployScript).toContain(
+      'for (const service of ["limits", "auth", "forge", "git", "gateway"])'
+    );
     expect(deployScript).toContain("`workers/${service}/wrangler.jsonc`");
   });
 });

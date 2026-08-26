@@ -96,6 +96,7 @@ describe("verifyPat", () => {
     if (!result.ok) return;
     expect(result.repositoryId).toBe(REPO_ID);
     expect(result.level).toBe("push");
+    expect(result.groupKey).toBe("free");
   });
 
   it("ok via namespace grant returns level=pull for pull-only", async () => {
@@ -113,6 +114,7 @@ describe("verifyPat", () => {
     if (!result.ok) return;
     expect(result.level).toBe("pull");
     expect(result.repositoryId).toBe(REPO_ID);
+    expect(result.groupKey).toBe("free");
   });
 
   it("returns malformed for an obviously bad token", async () => {

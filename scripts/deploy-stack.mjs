@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 export const workerConfigs = [
+  "workers/limits/wrangler.jsonc",
   "workers/auth/wrangler.jsonc",
   "workers/forge/wrangler.jsonc",
   "workers/git/wrangler.jsonc",
@@ -12,7 +13,7 @@ export const workerConfigs = [
 const unresolvedIdPattern = /REPLACE_WITH_[A-Z0-9_]+/;
 
 function cloudflareEnvironment() {
-  const authConfig = JSON.parse(readFileSync(workerConfigs[0], "utf8"));
+  const authConfig = JSON.parse(readFileSync("workers/auth/wrangler.jsonc", "utf8"));
   if (!/^[a-f0-9]{32}$/.test(authConfig.account_id ?? "")) {
     throw new Error("Auth Worker must declare a valid production account_id.");
   }
@@ -87,7 +88,7 @@ export function deployStack({ dryRun = false } = {}) {
     }
   }
 
-  for (const service of ["auth", "forge", "git", "gateway"]) {
+  for (const service of ["limits", "auth", "forge", "git", "gateway"]) {
     const args = ["wrangler", "deploy", "--config", `workers/${service}/wrangler.jsonc`];
     if (dryRun) args.push("--dry-run");
     if (!run("npx", args, { cloudflare: true })) return false;

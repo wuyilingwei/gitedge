@@ -111,6 +111,7 @@ export type PatVerifyOk = {
   ok: true;
   patId: string;
   userId: string;
+  groupKey: string;
   namespaceId: string;
   repositoryId?: string;
   // `level === "push"` authorizes receive-pack; any present grant
@@ -188,6 +189,10 @@ export async function verifyPat(env: Env, args: VerifyPatArgs): Promise<PatVerif
   if (!(await constantTimeEquals(expectedHash, presentedHash))) {
     return { ok: false, reason: "token-not-found" };
   }
+  const user = await env.DB.prepare("SELECT group_key FROM users WHERE id = ?")
+    .bind(pat.userId)
+    .first<{ group_key: string }>();
+  if (!user) return { ok: false, reason: "token-not-found" };
 
   // Resolve namespace either directly via id or by username; both must align
   // for the username-as-namespace-slug Git authentication contract.
@@ -212,6 +217,7 @@ export async function verifyPat(env: Env, args: VerifyPatArgs): Promise<PatVerif
         ok: true,
         patId: pat.id,
         userId: pat.userId,
+        groupKey: user.group_key,
         namespaceId: resolvedNamespaceId,
         repositoryId: resolvedRepositoryId,
         level: repoGrant.level,
@@ -225,6 +231,7 @@ export async function verifyPat(env: Env, args: VerifyPatArgs): Promise<PatVerif
       ok: true,
       patId: pat.id,
       userId: pat.userId,
+      groupKey: user.group_key,
       namespaceId: resolvedNamespaceId,
       repositoryId: resolvedRepositoryId,
       level: namespaceGrant.level,
