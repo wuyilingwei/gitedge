@@ -1,4 +1,4 @@
-# 005 生产部署配置计划
+# 006 生产部署配置计划
 
 - [x] 检查四个 Worker 配置、部署脚本与 Wrangler schema
 - [x] 写入生产 account_id、必要兼容日期/observability 与 Gateway 域名

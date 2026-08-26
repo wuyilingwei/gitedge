@@ -1,4 +1,4 @@
-# 005 Progress
+# 006 Progress
 
 - 读取仓库 AGENTS.md、agent-mode、Cloudflare、Workers best-practices、Wrangler 技能与相关任务记录。
 - 已检查四份 Worker 配置、部署脚本、包脚本与现有 Gateway 拓扑审计。
