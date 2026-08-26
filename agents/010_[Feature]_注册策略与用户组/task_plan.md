@@ -2,4 +2,4 @@
 - [x] 增加 users.group_key、注册策略配置与 TrustedUser.groupKey
 - [x] 增加注册关闭、默认组、登录/session 组信息的定向测试
 - [x] 运行定向测试、Auth 类型检查、Wrangler dry-run 与 diff 自检
-- [ ] 更新审计记录并提交变更
+- [x] 更新审计记录并提交变更
