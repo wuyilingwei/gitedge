@@ -12,3 +12,5 @@
 - 通过 78 项单元测试、6 项 Vue 测试、320 项 Worker 集成测试、四 Worker typecheck/启动分析、Vue 生产构建与完整四服务 dry-run。
 - 通过本任务文件 Prettier、diff whitespace 与禁止关键词检查；全仓库 Prettier 仍有未触及的存量差异。
 - 远端 migrations list 首次因 Wrangler 多账户选择失败且未产生变更；为部署脚本加入从 Auth 配置派生的显式账户环境，单元测试与完整 dry-run 再次通过。
+- 首轮四 Worker 生产发布成功；权威 DNS、TLS、首页、静态资源、未登录边界与 Cloudflare Custom Domain/入口边界通过。
+- 真实注册发现 PBKDF2 平台上限问题；已完成修复与定向验证，尚待重新发布和全流程验收。

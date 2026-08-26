@@ -13,3 +13,4 @@
 - [全仓库 Prettier 检查] -> [发现 12 个本任务未涉及的存量文件和 2 个本任务文件格式差异] -> [只格式化本任务涉及文件并通过定向 Prettier、`git diff --check` 与提交关键词扫描，保留无关用户文件]
 - [Worker 集成测试结束期告警] -> [320 项全部通过且进程退出码为 0，但运行器清理时输出 `Network connection lost`] -> [作为测试运行器清理期告警记录，不冒充无告警结果]
 - [D1 migrations 在多账户 OAuth 下忽略配置中的 account 选择] -> [首次只读 migrations list 以未选账户失败，D1 list 则正确定位 `My`] -> [部署脚本从 Auth 配置读取并校验 account ID，仅向 Wrangler 子进程显式传入 `CLOUDFLARE_ACCOUNT_ID`，再次 dry-run 通过]
+- [首次生产注册返回 Cloudflare 1101] -> [Auth 实时日志定位到 PBKDF2 600000 超出 Workers 100000 上限] -> [登记独立修复审计并在重新验收前将参数调整到平台支持的最高值]
