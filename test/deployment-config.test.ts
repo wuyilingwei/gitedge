@@ -23,6 +23,12 @@ interface WorkerConfig {
   };
   d1_databases?: D1Binding[];
   kv_namespaces?: KvBinding[];
+  observability?: { enabled: boolean };
+  queues?: {
+    producers: Array<{ binding: string; queue: string }>;
+    consumers: Array<{ queue: string; max_batch_size: number; max_batch_timeout: number }>;
+  };
+  r2_buckets?: Array<{ binding: string; bucket_name: string }>;
   routes?: unknown[];
   services?: Array<{ binding: string; service: string }>;
   workers_dev?: boolean;
@@ -30,6 +36,8 @@ interface WorkerConfig {
 
 const targetAccountId = "df4481f3ce1fa0394b4617442a97d147";
 const targetDomain = "gitedge.wuyilingwei.com";
+const targetD1Id = "c9a00d9d-db41-494e-b096-55b8b6bfe3a9";
+const targetKvId = "ece920cc5b2b4d4ca8972716ee16e4b4";
 const serviceNames = ["auth", "forge", "git", "gateway"] as const;
 
 function readWorkerConfig(service: (typeof serviceNames)[number]): WorkerConfig {
@@ -92,6 +100,7 @@ describe("production deployment configuration", () => {
     expect(forgeD1).toEqual(gitD1);
     expect(authD1.binding).toBe("DB");
     expect(authD1.database_name).toBe("gitedge");
+    expect(authD1.database_id).toBe(targetD1Id);
     expect(authD1.migrations_dir).toBe("../../migrations");
     expect(readdirSync(new URL("../migrations/", import.meta.url))).toContain(
       "0001_auth_forge.sql"
@@ -104,6 +113,23 @@ describe("production deployment configuration", () => {
 
     expect(forgeKv).toEqual(gitKv);
     expect(forgeKv.binding).toBe("ROUTES");
+    expect(forgeKv.id).toBe(targetKvId);
+  });
+
+  it("connects Git to the production R2 bucket and maintenance queue", () => {
+    expect(configs.git.r2_buckets).toEqual([
+      { binding: "REPO_BUCKET", bucket_name: "gitedge-git-repos" },
+    ]);
+    expect(configs.git.queues).toEqual({
+      producers: [{ binding: "REPO_TASKS_QUEUE", queue: "gitedge-git-repo-maint" }],
+      consumers: [{ queue: "gitedge-git-repo-maint", max_batch_size: 1, max_batch_timeout: 1 }],
+    });
+  });
+
+  it("enables observability for every service", () => {
+    for (const service of serviceNames) {
+      expect(configs[service].observability).toEqual({ enabled: true });
+    }
   });
 
   it("deploys the declared topology and applies the shared migration through Auth", () => {

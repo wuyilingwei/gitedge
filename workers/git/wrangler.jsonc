@@ -16,13 +16,13 @@
     { "tag": "v1", "new_sqlite_classes": ["RepoDurableObject"] }
   ],
   "kv_namespaces": [
-    { "binding": "ROUTES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+    { "binding": "ROUTES", "id": "ece920cc5b2b4d4ca8972716ee16e4b4" }
   ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "gitedge",
-      "database_id": "REPLACE_WITH_SHARED_D1_DATABASE_ID",
+      "database_id": "c9a00d9d-db41-494e-b096-55b8b6bfe3a9",
       "migrations_dir": "../../migrations"
     }
   ],
