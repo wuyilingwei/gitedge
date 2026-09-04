@@ -19,3 +19,4 @@
 | 011  |  [Feature] 公开仓库匿名访问  |    允许匿名读取公开仓库、Issue、Pull Request 与 Wiki，私有资源保持不可枚举    | 让公开仓库可被访问，同时保持可信会员写入和私有数据边界 | ✅ 已完成 |
 | 012  | [Feature] 严格请求限流 | Gateway 动态 API 与 Git Smart HTTP 的 IP/用户组严格滚动窗口限流 | 防止匿名 IP、用户组及高流量 Git 请求耗尽边缘资源 | ✅ 已完成 |
 | 013  | [Maintenance] 移动项目目录 | 将 GitEdge 主仓库移动到 `/Users/user/development/gitedge` 并修复关联 worktree | 统一开发项目存放位置且保持现有 Git worktree 可用 | ✅ 已完成 |
+| 014  | [Feature] 组织与 GitHub 外部登录 | 以 Vue 实现对齐 GitHub 基础语义的组织与外部身份体验，并提供 GitHub OAuth 身份识别和完整读取两档授权 | 补齐团队命名空间、外部登录与可控第三方信息读取能力 | 🔄 进行中 |
