@@ -11,6 +11,10 @@ type AuthEnv = {
   readonly LOG_LEVEL?: string;
   readonly ALLOW_PUBLIC_SIGNUP: string;
   readonly DEFAULT_USER_GROUP: string;
+  readonly GITHUB_CLIENT_ID?: string;
+  readonly GITHUB_CLIENT_SECRET?: string;
+  readonly GITHUB_API_BASE?: string;
+  readonly GITHUB_OAUTH_BASE?: string;
 };
 type UserRow = {
   id: string;
@@ -20,9 +24,18 @@ type UserRow = {
   password_hash: string;
 };
 type SessionRow = { id: string; identifier: string; group_key: string };
+type GithubOAuthStateRow = {
+  code_verifier: string;
+  access_level: "identity" | "read";
+  return_to: string;
+};
+type GithubTokenResponse = { access_token: string; token_type: string; scope: string };
+type GithubUserResponse = { id: number; login: string };
 
 const SESSION_COOKIE = "gitedge_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const GITHUB_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const GITHUB_READ_SCOPES = ["read:user", "user:email", "read:org"] as const;
 export const PBKDF2_ITERATIONS = 100_000;
 
 function json(body: unknown, status = 200, headers?: HeadersInit): Response {
@@ -79,6 +92,75 @@ function createToken(): string {
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replaceAll("=", "");
+}
+
+function createPkceVerifier(): string {
+  return createToken();
+}
+
+async function createPkceChallenge(verifier: string): Promise<string> {
+  return (await hashToken(verifier)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function githubOAuthBase(env: AuthEnv): string {
+  return env.GITHUB_OAUTH_BASE ?? "https://github.com";
+}
+
+function githubApiBase(env: AuthEnv): string {
+  return env.GITHUB_API_BASE ?? "https://api.github.com";
+}
+
+function isSafeReturnTo(value: string | null, request: Request): value is string {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\"))
+    return false;
+  const requestUrl = new URL(request.url);
+  const destination = new URL(value, requestUrl.origin);
+  return destination.origin === requestUrl.origin;
+}
+
+function githubErrorRedirect(returnTo: string): Response {
+  const destination = new URL(returnTo, "https://gitedge.invalid");
+  destination.searchParams.set("error", "github_oauth_failed");
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `${destination.pathname}${destination.search}` },
+  });
+}
+
+function splitScopes(value: string): Set<string> {
+  return new Set(value.split(/[,\s]+/).filter((scope) => scope.length > 0));
+}
+
+function scopesMatch(accessLevel: "identity" | "read", value: string): boolean {
+  const actual = splitScopes(value);
+  const expected = accessLevel === "identity" ? [] : GITHUB_READ_SCOPES;
+  return actual.size === expected.length && expected.every((scope) => actual.has(scope));
+}
+
+function isGithubTokenResponse(value: unknown): value is GithubTokenResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return (
+    "access_token" in value &&
+    typeof value.access_token === "string" &&
+    value.access_token.length > 0 &&
+    "token_type" in value &&
+    value.token_type === "bearer" &&
+    "scope" in value &&
+    typeof value.scope === "string"
+  );
+}
+
+function isGithubUserResponse(value: unknown): value is GithubUserResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return (
+    "id" in value &&
+    typeof value.id === "number" &&
+    Number.isSafeInteger(value.id) &&
+    value.id > 0 &&
+    "login" in value &&
+    typeof value.login === "string" &&
+    value.login.length > 0
+  );
 }
 
 function createSessionCookie(token: string, maxAge: number): string {
@@ -256,10 +338,239 @@ export async function logout(env: AuthEnv, token: string | null): Promise<void> 
       .run();
 }
 
+async function readGithubJson(response: Response): Promise<unknown | null> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function githubApiUrl(env: AuthEnv, path: string): string {
+  return `${githubApiBase(env).replace(/\/$/, "")}${path}`;
+}
+
+function githubHeaders(token: string): Headers {
+  return new Headers({
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${token}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+  });
+}
+
+async function fetchGithubApi(
+  env: AuthEnv,
+  token: string,
+  path: string,
+  accessLevel: "identity" | "read"
+): Promise<unknown | null> {
+  const response = await fetch(githubApiUrl(env, path), { headers: githubHeaders(token) });
+  const grantedScopes = response.headers.get("X-OAuth-Scopes");
+  if (!response.ok || grantedScopes === null || !scopesMatch(accessLevel, grantedScopes))
+    return null;
+  return readGithubJson(response);
+}
+
+function isGithubEmailsResponse(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entry) =>
+        !!entry &&
+        typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        "email" in entry &&
+        typeof entry.email === "string" &&
+        "verified" in entry &&
+        typeof entry.verified === "boolean"
+    )
+  );
+}
+
+function isGithubOrganizationsResponse(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entry) =>
+        !!entry &&
+        typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        "id" in entry &&
+        typeof entry.id === "number" &&
+        Number.isSafeInteger(entry.id) &&
+        entry.id > 0 &&
+        "login" in entry &&
+        typeof entry.login === "string"
+    )
+  );
+}
+
+async function findOrCreateGithubUser(env: AuthEnv, providerUserId: string): Promise<TrustedUser> {
+  const existing = await env.DB.prepare(
+    "SELECT users.id, users.identifier, users.group_key FROM external_identities JOIN users ON users.id = external_identities.user_id WHERE external_identities.provider = ? AND external_identities.provider_user_id = ?"
+  )
+    .bind("github", providerUserId)
+    .first<SessionRow>();
+  const now = Date.now();
+  if (existing) {
+    await env.DB.prepare(
+      "UPDATE external_identities SET last_verified_at = ? WHERE provider = ? AND provider_user_id = ?"
+    )
+      .bind(now, "github", providerUserId)
+      .run();
+    return { id: existing.id, identifier: existing.identifier, groupKey: existing.group_key };
+  }
+
+  // This identifier is independent of mutable GitHub account names and never derives from email.
+  const user: TrustedUser = {
+    id: crypto.randomUUID(),
+    identifier: `github-${createToken().slice(0, 24).toLowerCase()}`,
+    groupKey: env.DEFAULT_USER_GROUP,
+  };
+  const namespaceId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO users (id, identifier, group_key, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(user.id, user.identifier, user.groupKey, "", "", now),
+    env.DB.prepare(
+      "INSERT INTO external_identities (provider, provider_user_id, user_id, created_at, last_verified_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind("github", providerUserId, user.id, now, now),
+    env.DB.prepare(
+      "INSERT INTO namespaces (id, slug, created_by, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(namespaceId, user.identifier, user.id, now),
+    env.DB.prepare(
+      "INSERT INTO namespace_memberships (namespace_id, user_id, created_at) VALUES (?, ?, ?)"
+    ).bind(namespaceId, user.id, now),
+  ]);
+  return user;
+}
+
+export async function startGithubOAuth(request: Request, env: AuthEnv): Promise<Response> {
+  const logger = createLogger(env.LOG_LEVEL, { service: "auth" });
+  if (!env.GITHUB_CLIENT_ID || env.GITHUB_CLIENT_ID === "set-with-wrangler-secret-or-vars") {
+    logger.error("github-oauth:missing-client-id");
+    return fail(503, "bad_request", "GitHub sign-in is not configured.");
+  }
+  const url = new URL(request.url);
+  const access = url.searchParams.get("access");
+  const returnTo = url.searchParams.get("returnTo");
+  if ((access !== "identity" && access !== "read") || !isSafeReturnTo(returnTo, request))
+    return fail(400, "bad_request", "Invalid GitHub sign-in request.");
+
+  const state = createToken();
+  const verifier = createPkceVerifier();
+  const now = Date.now();
+  await env.DB.prepare(
+    "INSERT INTO github_oauth_states (state_hash, code_verifier, access_level, return_to, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+  )
+    .bind(await hashToken(state), verifier, access, returnTo, now + GITHUB_STATE_MAX_AGE_MS, now)
+    .run();
+  const authorizationUrl = new URL("/login/oauth/authorize", githubOAuthBase(env));
+  authorizationUrl.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
+  authorizationUrl.searchParams.set(
+    "redirect_uri",
+    new URL("/github/callback", request.url).toString()
+  );
+  authorizationUrl.searchParams.set("state", state);
+  authorizationUrl.searchParams.set("code_challenge", await createPkceChallenge(verifier));
+  authorizationUrl.searchParams.set("code_challenge_method", "S256");
+  if (access === "read") authorizationUrl.searchParams.set("scope", GITHUB_READ_SCOPES.join(" "));
+  logger.info("github-oauth:started", { access });
+  return Response.redirect(authorizationUrl.toString(), 302);
+}
+
+export async function completeGithubOAuth(request: Request, env: AuthEnv): Promise<Response> {
+  const logger = createLogger(env.LOG_LEVEL, { service: "auth" });
+  if (
+    !env.GITHUB_CLIENT_ID ||
+    env.GITHUB_CLIENT_ID === "set-with-wrangler-secret-or-vars" ||
+    !env.GITHUB_CLIENT_SECRET
+  ) {
+    logger.error("github-oauth:missing-client-config");
+    return fail(503, "bad_request", "GitHub sign-in is not configured.");
+  }
+  const url = new URL(request.url);
+  const state = url.searchParams.get("state");
+  if (!state) return fail(400, "bad_request", "Invalid GitHub sign-in response.");
+  const oauthState = await env.DB.prepare(
+    "DELETE FROM github_oauth_states WHERE state_hash = ? AND expires_at > ? RETURNING code_verifier, access_level, return_to"
+  )
+    .bind(await hashToken(state), Date.now())
+    .first<GithubOAuthStateRow>();
+  if (!oauthState) {
+    logger.warn("github-oauth:invalid-state");
+    return fail(400, "bad_request", "GitHub sign-in session has expired.");
+  }
+  if (url.searchParams.has("error")) {
+    logger.warn("github-oauth:provider-denied", { access: oauthState.access_level });
+    return githubErrorRedirect(oauthState.return_to);
+  }
+  const code = url.searchParams.get("code");
+  if (!code) return githubErrorRedirect(oauthState.return_to);
+  const tokenResponse = await fetch(
+    `${githubOAuthBase(env).replace(/\/$/, "")}/login/oauth/access_token`,
+    {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.GITHUB_CLIENT_ID,
+        client_secret: env.GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: new URL("/github/callback", request.url).toString(),
+        code_verifier: oauthState.code_verifier,
+      }),
+    }
+  );
+  const tokenPayload = await readGithubJson(tokenResponse);
+  if (
+    !tokenResponse.ok ||
+    !isGithubTokenResponse(tokenPayload) ||
+    !scopesMatch(oauthState.access_level, tokenPayload.scope)
+  ) {
+    logger.warn("github-oauth:token-rejected", { access: oauthState.access_level });
+    return githubErrorRedirect(oauthState.return_to);
+  }
+
+  const userPayload = await fetchGithubApi(
+    env,
+    tokenPayload.access_token,
+    "/user",
+    oauthState.access_level
+  );
+  if (!isGithubUserResponse(userPayload)) {
+    logger.warn("github-oauth:user-verification-failed", { access: oauthState.access_level });
+    return githubErrorRedirect(oauthState.return_to);
+  }
+  if (oauthState.access_level === "read") {
+    const [emails, organizations] = await Promise.all([
+      fetchGithubApi(env, tokenPayload.access_token, "/user/emails", oauthState.access_level),
+      fetchGithubApi(env, tokenPayload.access_token, "/user/orgs", oauthState.access_level),
+    ]);
+    if (!isGithubEmailsResponse(emails) || !isGithubOrganizationsResponse(organizations)) {
+      logger.warn("github-oauth:read-verification-failed");
+      return githubErrorRedirect(oauthState.return_to);
+    }
+  }
+
+  const user = await findOrCreateGithubUser(env, String(userPayload.id));
+  const sessionToken = await issueSession(env, user.id);
+  logger.info("github-oauth:completed", { userId: user.id, access: oauthState.access_level });
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: oauthState.return_to,
+      "Set-Cookie": createSessionCookie(sessionToken, SESSION_MAX_AGE_SECONDS),
+    },
+  });
+}
+
 export default {
   async fetch(request: Request, env: AuthEnv): Promise<Response> {
     const logger = createLogger(env.LOG_LEVEL, { service: "auth" });
     const path = new URL(request.url).pathname;
+    if (request.method === "GET" && path === "/github/start") return startGithubOAuth(request, env);
+    if (request.method === "GET" && path === "/github/callback")
+      return completeGithubOAuth(request, env);
     if (request.method === "POST" && path === "/register") {
       const result = await register(env, await readJson(request));
       if (!result.ok) return json({ error: result.error }, result.status);
