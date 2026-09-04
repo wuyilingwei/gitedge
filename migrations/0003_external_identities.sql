@@ -1,9 +1,17 @@
 PRAGMA foreign_keys = ON;
 
+ALTER TABLE users ADD COLUMN password_auth_enabled INTEGER NOT NULL DEFAULT 1 CHECK (password_auth_enabled IN (0, 1));
+
 CREATE TABLE IF NOT EXISTS external_identities (
   provider TEXT NOT NULL,
   provider_user_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
+  provider_login TEXT NOT NULL,
+  avatar_url TEXT,
+  profile_url TEXT,
+  access_level TEXT NOT NULL CHECK (access_level IN ('identity', 'read')),
+  emails_json TEXT,
+  organizations_json TEXT,
   created_at INTEGER NOT NULL,
   last_verified_at INTEGER NOT NULL,
   PRIMARY KEY (provider, provider_user_id),

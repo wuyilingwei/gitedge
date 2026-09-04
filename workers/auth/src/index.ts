@@ -22,15 +22,42 @@ type UserRow = {
   group_key: string;
   password_salt: string;
   password_hash: string;
+  password_auth_enabled: number;
 };
 type SessionRow = { id: string; identifier: string; group_key: string };
+type SessionWithExternalIdentityRow = SessionRow & {
+  provider: string | null;
+  provider_login: string | null;
+  avatar_url: string | null;
+  profile_url: string | null;
+  access_level: "identity" | "read" | null;
+  emails_json: string | null;
+  organizations_json: string | null;
+};
+type ExternalIdentitySummary = {
+  readonly provider: "github";
+  readonly login: string;
+  readonly avatarUrl?: string;
+  readonly profileUrl?: string;
+  readonly accessLevel: "identity" | "read";
+  readonly emails?: readonly string[];
+  readonly organizations?: readonly GithubOrganizationSummary[];
+};
+type SessionData = TrustedUser & { readonly externalIdentity?: ExternalIdentitySummary };
 type GithubOAuthStateRow = {
   code_verifier: string;
   access_level: "identity" | "read";
   return_to: string;
 };
 type GithubTokenResponse = { access_token: string; token_type: string; scope: string };
-type GithubUserResponse = { id: number; login: string };
+type GithubUserResponse = { id: number; login: string; avatar_url: string; html_url: string };
+type GithubEmail = { email: string; verified: boolean };
+type GithubOrganization = { id: number; login: string; avatar_url: string };
+type GithubOrganizationSummary = {
+  readonly id: number;
+  readonly login: string;
+  readonly avatarUrl: string;
+};
 
 const SESSION_COOKIE = "gitedge_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
@@ -110,6 +137,10 @@ function githubApiBase(env: AuthEnv): string {
   return env.GITHUB_API_BASE ?? "https://api.github.com";
 }
 
+function githubCallbackUrl(request: Request): string {
+  return new URL("/api/auth/github/callback", request.url).toString();
+}
+
 function isSafeReturnTo(value: string | null, request: Request): value is string {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\"))
     return false;
@@ -159,7 +190,11 @@ function isGithubUserResponse(value: unknown): value is GithubUserResponse {
     value.id > 0 &&
     "login" in value &&
     typeof value.login === "string" &&
-    value.login.length > 0
+    value.login.length > 0 &&
+    "avatar_url" in value &&
+    typeof value.avatar_url === "string" &&
+    "html_url" in value &&
+    typeof value.html_url === "string"
   );
 }
 
@@ -229,7 +264,7 @@ export async function register(
     groupKey: env.DEFAULT_USER_GROUP,
   };
   await env.DB.prepare(
-    "INSERT INTO users (id, identifier, group_key, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO users (id, identifier, group_key, password_salt, password_hash, password_auth_enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
   )
     .bind(
       user.id,
@@ -237,6 +272,7 @@ export async function register(
       user.groupKey,
       bytesToBase64(salt),
       await derivePasswordHash(parsed.data.password, salt),
+      1,
       Date.now()
     )
     .run();
@@ -266,11 +302,17 @@ export async function login(
     };
   const identifier = parsed.data.identifier.toLowerCase();
   const user = await env.DB.prepare(
-    "SELECT id, identifier, group_key, password_salt, password_hash FROM users WHERE identifier = ?"
+    "SELECT id, identifier, group_key, password_salt, password_hash, password_auth_enabled FROM users WHERE identifier = ?"
   )
     .bind(identifier)
     .first<UserRow>();
   if (!user)
+    return {
+      ok: false,
+      status: 401,
+      error: { code: "unauthorized", message: "Invalid identifier or password." },
+    };
+  if (user.password_auth_enabled !== 1)
     return {
       ok: false,
       status: 401,
@@ -307,10 +349,75 @@ export async function login(
   };
 }
 
+function parseStringArray(value: string | null): readonly string[] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")
+      ? parsed
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseOrganizations(
+  value: string | null
+): readonly GithubOrganizationSummary[] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return undefined;
+    const organizations: GithubOrganizationSummary[] = [];
+    for (const entry of parsed) {
+      if (
+        !entry ||
+        typeof entry !== "object" ||
+        Array.isArray(entry) ||
+        !("id" in entry) ||
+        typeof entry.id !== "number" ||
+        !Number.isSafeInteger(entry.id) ||
+        !("login" in entry) ||
+        typeof entry.login !== "string" ||
+        !("avatarUrl" in entry) ||
+        typeof entry.avatarUrl !== "string"
+      )
+        return undefined;
+      organizations.push({ id: entry.id, login: entry.login, avatarUrl: entry.avatarUrl });
+    }
+    return organizations;
+  } catch {
+    return undefined;
+  }
+}
+
+function externalIdentityFromRow(
+  row: SessionWithExternalIdentityRow
+): ExternalIdentitySummary | undefined {
+  if (
+    row.provider !== "github" ||
+    !row.provider_login ||
+    (row.access_level !== "identity" && row.access_level !== "read")
+  )
+    return undefined;
+  const emails = row.access_level === "read" ? parseStringArray(row.emails_json) : undefined;
+  const organizations =
+    row.access_level === "read" ? parseOrganizations(row.organizations_json) : undefined;
+  return {
+    provider: "github",
+    login: row.provider_login,
+    ...(row.avatar_url ? { avatarUrl: row.avatar_url } : {}),
+    ...(row.profile_url ? { profileUrl: row.profile_url } : {}),
+    accessLevel: row.access_level,
+    ...(emails ? { emails } : {}),
+    ...(organizations ? { organizations } : {}),
+  };
+}
+
 export async function session(
   env: AuthEnv,
   token: string | null
-): Promise<ServiceResult<TrustedUser>> {
+): Promise<ServiceResult<SessionData>> {
   if (!token)
     return {
       ok: false,
@@ -318,17 +425,26 @@ export async function session(
       error: { code: "unauthorized", message: "Authentication is required." },
     };
   const row = await env.DB.prepare(
-    "SELECT users.id, users.identifier, users.group_key FROM auth_sessions JOIN users ON users.id = auth_sessions.user_id WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?"
+    "SELECT users.id, users.identifier, users.group_key, external_identities.provider, external_identities.provider_login, external_identities.avatar_url, external_identities.profile_url, external_identities.access_level, external_identities.emails_json, external_identities.organizations_json FROM auth_sessions JOIN users ON users.id = auth_sessions.user_id LEFT JOIN external_identities ON external_identities.user_id = users.id AND external_identities.provider = 'github' WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?"
   )
     .bind(await hashToken(token), Date.now())
-    .first<SessionRow>();
+    .first<SessionWithExternalIdentityRow>();
   if (!row)
     return {
       ok: false,
       status: 401,
       error: { code: "unauthorized", message: "Authentication is required." },
     };
-  return { ok: true, data: { id: row.id, identifier: row.identifier, groupKey: row.group_key } };
+  const externalIdentity = externalIdentityFromRow(row);
+  return {
+    ok: true,
+    data: {
+      id: row.id,
+      identifier: row.identifier,
+      groupKey: row.group_key,
+      ...(externalIdentity ? { externalIdentity } : {}),
+    },
+  };
 }
 
 export async function logout(env: AuthEnv, token: string | null): Promise<void> {
@@ -371,7 +487,7 @@ async function fetchGithubApi(
   return readGithubJson(response);
 }
 
-function isGithubEmailsResponse(value: unknown): boolean {
+function isGithubEmailsResponse(value: unknown): value is GithubEmail[] {
   return (
     Array.isArray(value) &&
     value.every(
@@ -387,7 +503,7 @@ function isGithubEmailsResponse(value: unknown): boolean {
   );
 }
 
-function isGithubOrganizationsResponse(value: unknown): boolean {
+function isGithubOrganizationsResponse(value: unknown): value is GithubOrganization[] {
   return (
     Array.isArray(value) &&
     value.every(
@@ -400,12 +516,21 @@ function isGithubOrganizationsResponse(value: unknown): boolean {
         Number.isSafeInteger(entry.id) &&
         entry.id > 0 &&
         "login" in entry &&
-        typeof entry.login === "string"
+        typeof entry.login === "string" &&
+        "avatar_url" in entry &&
+        typeof entry.avatar_url === "string"
     )
   );
 }
 
-async function findOrCreateGithubUser(env: AuthEnv, providerUserId: string): Promise<TrustedUser> {
+async function findOrCreateGithubUser(
+  env: AuthEnv,
+  githubUser: GithubUserResponse,
+  accessLevel: "identity" | "read",
+  emails: readonly string[] | undefined,
+  organizations: readonly GithubOrganizationSummary[] | undefined
+): Promise<TrustedUser> {
+  const providerUserId = String(githubUser.id);
   const existing = await env.DB.prepare(
     "SELECT users.id, users.identifier, users.group_key FROM external_identities JOIN users ON users.id = external_identities.user_id WHERE external_identities.provider = ? AND external_identities.provider_user_id = ?"
   )
@@ -414,9 +539,19 @@ async function findOrCreateGithubUser(env: AuthEnv, providerUserId: string): Pro
   const now = Date.now();
   if (existing) {
     await env.DB.prepare(
-      "UPDATE external_identities SET last_verified_at = ? WHERE provider = ? AND provider_user_id = ?"
+      "UPDATE external_identities SET provider_login = ?, avatar_url = ?, profile_url = ?, access_level = ?, emails_json = ?, organizations_json = ?, last_verified_at = ? WHERE provider = ? AND provider_user_id = ?"
     )
-      .bind(now, "github", providerUserId)
+      .bind(
+        githubUser.login,
+        githubUser.avatar_url || null,
+        githubUser.html_url || null,
+        accessLevel,
+        emails ? JSON.stringify(emails) : null,
+        organizations ? JSON.stringify(organizations) : null,
+        now,
+        "github",
+        providerUserId
+      )
       .run();
     return { id: existing.id, identifier: existing.identifier, groupKey: existing.group_key };
   }
@@ -430,11 +565,23 @@ async function findOrCreateGithubUser(env: AuthEnv, providerUserId: string): Pro
   const namespaceId = crypto.randomUUID();
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO users (id, identifier, group_key, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).bind(user.id, user.identifier, user.groupKey, "", "", now),
+      "INSERT INTO users (id, identifier, group_key, password_salt, password_hash, password_auth_enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).bind(user.id, user.identifier, user.groupKey, "", "", 0, now),
     env.DB.prepare(
-      "INSERT INTO external_identities (provider, provider_user_id, user_id, created_at, last_verified_at) VALUES (?, ?, ?, ?, ?)"
-    ).bind("github", providerUserId, user.id, now, now),
+      "INSERT INTO external_identities (provider, provider_user_id, user_id, provider_login, avatar_url, profile_url, access_level, emails_json, organizations_json, created_at, last_verified_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(
+      "github",
+      providerUserId,
+      user.id,
+      githubUser.login,
+      githubUser.avatar_url || null,
+      githubUser.html_url || null,
+      accessLevel,
+      emails ? JSON.stringify(emails) : null,
+      organizations ? JSON.stringify(organizations) : null,
+      now,
+      now
+    ),
     env.DB.prepare(
       "INSERT INTO namespaces (id, slug, created_by, created_at) VALUES (?, ?, ?, ?)"
     ).bind(namespaceId, user.identifier, user.id, now),
@@ -467,10 +614,7 @@ export async function startGithubOAuth(request: Request, env: AuthEnv): Promise<
     .run();
   const authorizationUrl = new URL("/login/oauth/authorize", githubOAuthBase(env));
   authorizationUrl.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
-  authorizationUrl.searchParams.set(
-    "redirect_uri",
-    new URL("/github/callback", request.url).toString()
-  );
+  authorizationUrl.searchParams.set("redirect_uri", githubCallbackUrl(request));
   authorizationUrl.searchParams.set("state", state);
   authorizationUrl.searchParams.set("code_challenge", await createPkceChallenge(verifier));
   authorizationUrl.searchParams.set("code_challenge_method", "S256");
@@ -516,7 +660,7 @@ export async function completeGithubOAuth(request: Request, env: AuthEnv): Promi
         client_id: env.GITHUB_CLIENT_ID,
         client_secret: env.GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: new URL("/github/callback", request.url).toString(),
+        redirect_uri: githubCallbackUrl(request),
         code_verifier: oauthState.code_verifier,
       }),
     }
@@ -541,18 +685,36 @@ export async function completeGithubOAuth(request: Request, env: AuthEnv): Promi
     logger.warn("github-oauth:user-verification-failed", { access: oauthState.access_level });
     return githubErrorRedirect(oauthState.return_to);
   }
+  let emails: readonly string[] | undefined;
+  let organizations: readonly GithubOrganizationSummary[] | undefined;
   if (oauthState.access_level === "read") {
-    const [emails, organizations] = await Promise.all([
+    const [emailsResponse, organizationsResponse] = await Promise.all([
       fetchGithubApi(env, tokenPayload.access_token, "/user/emails", oauthState.access_level),
       fetchGithubApi(env, tokenPayload.access_token, "/user/orgs", oauthState.access_level),
     ]);
-    if (!isGithubEmailsResponse(emails) || !isGithubOrganizationsResponse(organizations)) {
+    if (!isGithubEmailsResponse(emailsResponse)) {
       logger.warn("github-oauth:read-verification-failed");
       return githubErrorRedirect(oauthState.return_to);
     }
+    if (!isGithubOrganizationsResponse(organizationsResponse)) {
+      logger.warn("github-oauth:read-verification-failed");
+      return githubErrorRedirect(oauthState.return_to);
+    }
+    emails = emailsResponse.filter((email) => email.verified).map((email) => email.email);
+    organizations = organizationsResponse.map((organization) => ({
+      id: organization.id,
+      login: organization.login,
+      avatarUrl: organization.avatar_url,
+    }));
   }
 
-  const user = await findOrCreateGithubUser(env, String(userPayload.id));
+  const user = await findOrCreateGithubUser(
+    env,
+    userPayload,
+    oauthState.access_level,
+    emails,
+    organizations
+  );
   const sessionToken = await issueSession(env, user.id);
   logger.info("github-oauth:completed", { userId: user.id, access: oauthState.access_level });
   return new Response(null, {
