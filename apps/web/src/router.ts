@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from "vue-router";
 import AuthView from "./pages/AuthView.vue";
 import DashboardView from "./pages/DashboardView.vue";
 import RepositoryView from "./pages/RepositoryView.vue";
+import OrganizationsView from "./pages/OrganizationsView.vue";
+import OrganizationView from "./pages/OrganizationView.vue";
 import { refreshSession, sessionState } from "./lib/session";
 
 export const router = createRouter({
@@ -11,6 +13,8 @@ export const router = createRouter({
     { path: "/login", component: AuthView, meta: { public: true } },
     { path: "/register", component: AuthView, meta: { public: true } },
     { path: "/dashboard", component: DashboardView },
+    { path: "/organizations", component: OrganizationsView },
+    { path: "/organizations/:slug", component: OrganizationView },
     {
       path: "/:owner/:repo/:section(code|issues|pulls|wiki|settings)?",
       component: RepositoryView,

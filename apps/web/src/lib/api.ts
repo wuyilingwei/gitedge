@@ -1,6 +1,30 @@
 export interface User {
   id: string;
   identifier: string;
+  externalIdentity?: ExternalIdentity;
+}
+
+export interface ExternalIdentity {
+  provider: "github";
+  login: string;
+  avatarUrl?: string;
+  profileUrl?: string;
+  accessLevel: "identity" | "read";
+  emails?: string[];
+  organizations?: { login: string; avatarUrl?: string }[];
+}
+
+export interface Organization {
+  slug: string;
+  displayName: string;
+  description?: string;
+  avatarUrl?: string;
+  role?: "owner" | "member";
+}
+
+export interface OrganizationMember {
+  identifier: string;
+  role: "owner" | "member";
 }
 
 export interface Repository {
@@ -89,6 +113,7 @@ export const api = {
     ),
   createRepository: (payload: {
     name: string;
+    owner: string;
     description: string;
     visibility: "public" | "private";
   }) =>
@@ -96,10 +121,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify({
         slug: payload.name,
+        owner: payload.owner,
         description: payload.description,
         visibility: payload.visibility,
       }),
     }),
+  organizations: () => request<Organization[]>("/api/forge/organizations"),
+  createOrganization: (payload: { slug: string; displayName: string; description: string }) =>
+    request<Organization>("/api/forge/organizations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  organization: (slug: string) =>
+    request<Organization>(`/api/forge/organizations/${encodeURIComponent(slug)}`),
+  organizationMembers: (slug: string) =>
+    request<OrganizationMember[]>(`/api/forge/organizations/${encodeURIComponent(slug)}/members`),
+  addOrganizationMember: (slug: string, payload: { identifier: string; role: "owner" | "member" }) =>
+    request<OrganizationMember>(
+      `/api/forge/organizations/${encodeURIComponent(slug)}/members`,
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
   issues: (repositoryId: string) =>
     request<Issue[]>(`/api/forge/repositories/${repositoryId}/issues`),
   publicIssues: (owner: string, slug: string) =>

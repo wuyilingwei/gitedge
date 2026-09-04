@@ -76,15 +76,25 @@ describe("GitEdge API client", () => {
       new Response(JSON.stringify({ data: { id: "repo-7" } }), { status: 201 })
     );
 
-    await api.createRepository({ name: "edge", description: "At the edge", visibility: "public" });
+    await api.createRepository({ owner: "rosmontis", name: "edge", description: "At the edge", visibility: "public" });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "/api/forge/repositories",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ slug: "edge", description: "At the edge", visibility: "public" }),
+        body: JSON.stringify({ slug: "edge", owner: "rosmontis", description: "At the edge", visibility: "public" }),
       })
     );
+  });
+
+  it("exposes organization endpoints and preserves the owner namespace", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ data: [] }), { status: 200 })
+    );
+    await api.organizations();
+    await api.organizationMembers("acme");
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/forge/organizations", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/forge/organizations/acme/members", expect.anything());
   });
 
   it("uses Forge field names and a slug-addressed wiki endpoint", async () => {
