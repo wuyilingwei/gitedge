@@ -1,4 +1,6 @@
 import {
+  AddOrganizationMemberInputSchema,
+  CreateOrganizationInputSchema,
   CreateIssueInputSchema,
   CreatePullRequestInputSchema,
   CreateRepositoryInputSchema,
@@ -30,6 +32,23 @@ type RepositoryRow = {
   updated_at: number;
 };
 type NumberRow = { number: number | null };
+type NamespaceKind = "personal" | "organization";
+type OrganizationRole = "owner" | "member";
+type NamespaceAccessRow = {
+  id: string;
+  slug: string;
+  kind: NamespaceKind;
+  display_name: string;
+  description: string;
+  created_by: string;
+  created_at: number;
+  role: OrganizationRole | null;
+};
+type OrganizationMemberRow = {
+  identifier: string;
+  role: OrganizationRole;
+  createdAt: number;
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -109,6 +128,37 @@ function repoResponse(row: RepositoryRow) {
   };
 }
 
+function organizationResponse(row: NamespaceAccessRow) {
+  return {
+    slug: row.slug,
+    displayName: row.display_name,
+    description: row.description,
+    createdAt: row.created_at,
+    role: row.role,
+  };
+}
+
+async function namespaceForUser(
+  env: ForgeEnv,
+  userId: string,
+  slug: string
+): Promise<NamespaceAccessRow | null> {
+  return env.DB.prepare(
+    "SELECT namespaces.id, namespaces.slug, namespaces.kind, namespaces.display_name, namespaces.description, namespaces.created_by, namespaces.created_at, namespace_memberships.role FROM namespaces LEFT JOIN namespace_memberships ON namespace_memberships.namespace_id = namespaces.id AND namespace_memberships.user_id = ? WHERE namespaces.slug = ?"
+  )
+    .bind(userId, slug)
+    .first<NamespaceAccessRow>();
+}
+
+function organizationOwner(namespace: NamespaceAccessRow): boolean {
+  return namespace.kind === "organization" && namespace.role === "owner";
+}
+
+function canCreateRepository(namespace: NamespaceAccessRow, userId: string): boolean {
+  if (namespace.kind === "organization") return organizationOwner(namespace);
+  return namespace.created_by === userId;
+}
+
 async function publicRepositoryRead(env: ForgeEnv, parts: string[]): Promise<Response> {
   const owner = parts[2];
   const slug = parts[3];
@@ -167,6 +217,130 @@ export default {
     const user = trustedUser(request);
     if (!user) return error(401, "unauthorized", "Trusted user context is required.");
 
+    if (request.method === "GET" && url.pathname === "/organizations") {
+      const rows = await env.DB.prepare(
+        "SELECT namespaces.id, namespaces.slug, namespaces.kind, namespaces.display_name, namespaces.description, namespaces.created_by, namespaces.created_at, namespace_memberships.role FROM namespaces JOIN namespace_memberships ON namespace_memberships.namespace_id = namespaces.id WHERE namespace_memberships.user_id = ? AND namespaces.kind = 'organization' ORDER BY namespaces.slug ASC"
+      )
+        .bind(user.id)
+        .all<NamespaceAccessRow>();
+      return json({ data: rows.results.map(organizationResponse) });
+    }
+    if (request.method === "POST" && url.pathname === "/organizations") {
+      const parsed = CreateOrganizationInputSchema.safeParse(await parseJson(request));
+      if (!parsed.success) return error(400, "bad_request", "Invalid organization payload.");
+      const now = Date.now();
+      const organizationId = crypto.randomUUID();
+      try {
+        await env.DB.batch([
+          env.DB.prepare(
+            "INSERT INTO namespaces (id, slug, created_by, created_at, kind, display_name, description) VALUES (?, ?, ?, ?, 'organization', ?, ?)"
+          ).bind(
+            organizationId,
+            parsed.data.slug,
+            user.id,
+            now,
+            parsed.data.displayName,
+            parsed.data.description
+          ),
+          env.DB.prepare(
+            "INSERT INTO namespace_memberships (namespace_id, user_id, created_at, role) VALUES (?, ?, ?, 'owner')"
+          ).bind(organizationId, user.id, now),
+        ]);
+      } catch {
+        logger.warn("forge:organization-create-conflict", {
+          slug: parsed.data.slug,
+          userId: user.id,
+        });
+        return error(409, "conflict", "Organization slug already exists.");
+      }
+      const organization: NamespaceAccessRow = {
+        id: organizationId,
+        slug: parsed.data.slug,
+        kind: "organization",
+        display_name: parsed.data.displayName,
+        description: parsed.data.description,
+        created_by: user.id,
+        created_at: now,
+        role: "owner",
+      };
+      logger.info("forge:organization-created", {
+        organizationId,
+        slug: organization.slug,
+        userId: user.id,
+      });
+      return json({ data: organizationResponse(organization) }, 201);
+    }
+
+    const organizationSlug = parts[1];
+    if (parts[0] === "organizations" && organizationSlug) {
+      const organization = await namespaceForUser(env, user.id, organizationSlug);
+      if (!organization || organization.kind !== "organization")
+        return error(404, "not_found", "Organization was not found.");
+      if (request.method === "GET" && parts.length === 2)
+        return json({ data: organizationResponse(organization) });
+      if (parts[2] === "members") {
+        if (request.method === "GET" && parts.length === 3) {
+          if (!organization.role)
+            return error(403, "forbidden", "Organization membership is required.");
+          const rows = await env.DB.prepare(
+            "SELECT users.identifier, namespace_memberships.role, namespace_memberships.created_at AS createdAt FROM namespace_memberships JOIN users ON users.id = namespace_memberships.user_id WHERE namespace_memberships.namespace_id = ? ORDER BY namespace_memberships.role DESC, users.identifier ASC"
+          )
+            .bind(organization.id)
+            .all<OrganizationMemberRow>();
+          return json({ data: rows.results });
+        }
+        if (!organizationOwner(organization))
+          return error(403, "forbidden", "Organization owner access is required.");
+        if (request.method === "POST" && parts.length === 3) {
+          const parsed = AddOrganizationMemberInputSchema.safeParse(await parseJson(request));
+          if (!parsed.success)
+            return error(400, "bad_request", "Invalid organization member payload.");
+          const result = await env.DB.prepare(
+            "INSERT OR IGNORE INTO namespace_memberships (namespace_id, user_id, created_at, role) SELECT ?, users.id, ?, ? FROM users WHERE users.identifier = ?"
+          )
+            .bind(organization.id, Date.now(), parsed.data.role, parsed.data.identifier)
+            .run();
+          if (result.meta.changes !== 1)
+            return error(
+              409,
+              "conflict",
+              "User was not found or is already an organization member."
+            );
+          logger.info("forge:organization-member-added", {
+            organizationId: organization.id,
+            identifier: parsed.data.identifier,
+            role: parsed.data.role,
+            userId: user.id,
+          });
+          return json(
+            { data: { identifier: parsed.data.identifier, role: parsed.data.role } },
+            201
+          );
+        }
+        const memberIdentifier = parts[3];
+        if (request.method === "DELETE" && memberIdentifier && parts.length === 4) {
+          const result = await env.DB.prepare(
+            "DELETE FROM namespace_memberships WHERE namespace_id = ? AND user_id = (SELECT id FROM users WHERE identifier = ?) AND NOT (role = 'owner' AND (SELECT COUNT(*) FROM namespace_memberships WHERE namespace_id = ? AND role = 'owner') <= 1) RETURNING user_id"
+          )
+            .bind(organization.id, memberIdentifier, organization.id)
+            .first<{ user_id: string }>();
+          if (!result)
+            return error(
+              409,
+              "conflict",
+              "Member was not found or is the last organization owner."
+            );
+          logger.info("forge:organization-member-removed", {
+            organizationId: organization.id,
+            identifier: memberIdentifier,
+            userId: user.id,
+          });
+          return new Response(null, { status: 204 });
+        }
+      }
+      return error(405, "method_not_allowed", "Method is not allowed for this endpoint.");
+    }
+
     if (request.method === "GET" && url.pathname === "/repositories") {
       const rows = await env.DB.prepare(
         "SELECT repositories.id, repositories.namespace_id, namespaces.slug AS owner, repositories.slug, repositories.visibility, repositories.description, repositories.created_at, repositories.updated_at FROM repositories JOIN namespaces ON namespaces.id = repositories.namespace_id JOIN namespace_memberships ON namespace_memberships.namespace_id = repositories.namespace_id WHERE namespace_memberships.user_id = ? ORDER BY repositories.updated_at DESC"
@@ -188,21 +362,15 @@ export default {
       if ((repositoryCount?.count ?? 0) >= groupLimits.maxRepositories) {
         return error(403, "forbidden", "Repository limit reached for this user group.");
       }
-      const namespace = await env.DB.prepare(
-        "SELECT id FROM namespaces WHERE created_by = ? ORDER BY created_at ASC LIMIT 1"
-      )
-        .bind(user.id)
-        .first<{ id: string }>();
-      if (!namespace) return error(403, "forbidden", "No personal namespace is available.");
+      const namespace = await namespaceForUser(env, user.id, parsed.data.owner);
+      if (!namespace) return error(404, "not_found", "Repository owner was not found.");
+      if (!canCreateRepository(namespace, user.id))
+        return error(403, "forbidden", "Repository creation requires namespace owner access.");
       const now = Date.now();
-      const owner = await env.DB.prepare("SELECT slug FROM namespaces WHERE id = ?")
-        .bind(namespace.id)
-        .first<{ slug: string }>();
-      if (!owner) return error(403, "forbidden", "No personal namespace is available.");
       const repository: RepositoryRow = {
         id: crypto.randomUUID(),
         namespace_id: namespace.id,
-        owner: owner.slug,
+        owner: namespace.slug,
         slug: parsed.data.slug,
         visibility: parsed.data.visibility,
         description: parsed.data.description,
@@ -228,7 +396,7 @@ export default {
         return error(409, "conflict", "Repository slug already exists.");
       try {
         await env.ROUTES.put(
-          repositoryRouteCacheKey(owner.slug, repository.slug),
+          repositoryRouteCacheKey(namespace.slug, repository.slug),
           JSON.stringify({
             repositoryId: repository.id,
             namespaceId: namespace.id,
@@ -240,11 +408,16 @@ export default {
         await env.DB.prepare("DELETE FROM repositories WHERE id = ?").bind(repository.id).run();
         logger.error("forge:repository-route-cache-failed", {
           repositoryId: repository.id,
+          namespaceId: namespace.id,
           error: routeError instanceof Error ? routeError.message : String(routeError),
         });
         return error(503, "internal_error", "Repository routing is unavailable.");
       }
-      logger.info("forge:repository-created", { repositoryId: repository.id, userId: user.id });
+      logger.info("forge:repository-created", {
+        repositoryId: repository.id,
+        namespaceId: namespace.id,
+        userId: user.id,
+      });
       return json({ data: repoResponse(repository) }, 201);
     }
 
