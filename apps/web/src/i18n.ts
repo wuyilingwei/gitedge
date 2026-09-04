@@ -91,6 +91,12 @@ const messages = {
     noWriteScope: "不会请求仓库写权限。",
     oauthError: "GitHub 登录未完成：{error}",
     account: "账户",
+    accessLevel: "授权级别",
+    identityAccess: "仅身份识别",
+    readAccess: "读取账户资料",
+    emails: "邮箱",
+    noConnectedData: "该授权级别未提供此数据",
+    noGithubIdentity: "尚未连接 GitHub 身份",
   },
   en: {
     brand: "码锋",
@@ -182,6 +188,12 @@ const messages = {
     noWriteScope: "We never request repository write access.",
     oauthError: "GitHub sign-in did not finish: {error}",
     account: "Account",
+    accessLevel: "Access level",
+    identityAccess: "Identity only",
+    readAccess: "Read account profile",
+    emails: "Emails",
+    noConnectedData: "This access level did not provide this data",
+    noGithubIdentity: "No GitHub identity connected",
   },
 };
 

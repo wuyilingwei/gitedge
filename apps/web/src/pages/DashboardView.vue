@@ -62,10 +62,21 @@ onMounted(load);
       <button class="button primary" @click="showForm = !showForm">+ {{ t("newRepo") }}</button>
     </div>
     <form v-if="showForm" class="panel create-form" @submit.prevent="createRepository">
-      <label>{{ t("repositoryOwner") }}<select v-model="owner" required>
-        <option :value="sessionState.user?.identifier">{{ sessionState.user?.identifier }} ({{ t("personal") }})</option>
-        <option v-for="organization in organizations" :key="organization.slug" :value="organization.slug">{{ organization.displayName }}</option>
-      </select></label>
+      <label
+        >{{ t("repositoryOwner")
+        }}<select v-model="owner" required>
+          <option :value="sessionState.user?.identifier">
+            {{ sessionState.user?.identifier }} ({{ t("personal") }})
+          </option>
+          <option
+            v-for="organization in organizations"
+            :key="organization.slug"
+            :value="organization.slug"
+          >
+            {{ organization.displayName }}
+          </option>
+        </select></label
+      >
       <label>{{ t("repositoryName") }}<input v-model="form.name" required /></label>
       <label>{{ t("description") }}<input v-model="form.description" /></label>
       <label

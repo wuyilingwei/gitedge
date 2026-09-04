@@ -136,11 +136,14 @@ export const api = {
     request<Organization>(`/api/forge/organizations/${encodeURIComponent(slug)}`),
   organizationMembers: (slug: string) =>
     request<OrganizationMember[]>(`/api/forge/organizations/${encodeURIComponent(slug)}/members`),
-  addOrganizationMember: (slug: string, payload: { identifier: string; role: "owner" | "member" }) =>
-    request<OrganizationMember>(
-      `/api/forge/organizations/${encodeURIComponent(slug)}/members`,
-      { method: "POST", body: JSON.stringify(payload) }
-    ),
+  addOrganizationMember: (
+    slug: string,
+    payload: { identifier: string; role: "owner" | "member" }
+  ) =>
+    request<OrganizationMember>(`/api/forge/organizations/${encodeURIComponent(slug)}/members`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   issues: (repositoryId: string) =>
     request<Issue[]>(`/api/forge/repositories/${repositoryId}/issues`),
   publicIssues: (owner: string, slug: string) =>

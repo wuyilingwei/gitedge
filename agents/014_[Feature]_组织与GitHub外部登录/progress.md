@@ -7,3 +7,5 @@
 - 2026-09-03：扩展 API client，加入外部身份、组织、成员和带 owner 的仓库创建契约。
 - 2026-09-03：完成 GitHub 两档导航登录、OAuth 错误展示、组织列表/创建/详情/成员页面、全局入口、账户摘要和响应式样式。
 - 2026-09-03：`npm run test` 通过（8 tests）；`npm run build` 通过（vue-tsc 与 Vite build）。
+- 2026-09-03：按反馈用 Prettier 格式化所有 web/test 改动；分离组织页面加载与创建错误，限制仅 owner 添加成员，并新增账户外部身份摘要页。
+- 2026-09-03：补充组织创建/成员角色 API 回归测试；`npm run test` 通过（9 tests），`npm run build` 通过。

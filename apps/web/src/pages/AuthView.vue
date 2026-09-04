@@ -15,7 +15,9 @@ const busy = ref(false);
 const oauthError = computed(() => String(route.query.error || ""));
 function githubLogin(access: "identity" | "read") {
   const returnTo = String(route.query.redirect || "/dashboard");
-  window.location.assign(`/api/auth/github/start?access=${access}&returnTo=${encodeURIComponent(returnTo)}`);
+  window.location.assign(
+    `/api/auth/github/start?access=${access}&returnTo=${encodeURIComponent(returnTo)}`
+  );
 }
 async function submit() {
   busy.value = true;
@@ -64,12 +66,24 @@ async function submit() {
       <button class="button primary" :disabled="busy">
         {{ busy ? t("loading") : t("submit") }}
       </button>
-      <div class="oauth-divider"><span>{{ t("orContinue") }}</span></div>
+      <div class="oauth-divider">
+        <span>{{ t("orContinue") }}</span>
+      </div>
       <div class="oauth-options">
-        <button type="button" class="button github" @click="githubLogin('identity')">◉ {{ t("githubIdentity") }}</button>
-        <p class="permission-card"><strong>{{ t("identityTitle") }}</strong><br />{{ t("identityText") }}</p>
-        <button type="button" class="button github" @click="githubLogin('read')">◉ {{ t("githubRead") }}</button>
-        <p class="permission-card"><strong>{{ t("readTitle") }}</strong><br />{{ t("readText") }}</p>
+        <button type="button" class="button github" @click="githubLogin('identity')">
+          ◉ {{ t("githubIdentity") }}
+        </button>
+        <p class="permission-card">
+          <strong>{{ t("identityTitle") }}</strong
+          ><br />{{ t("identityText") }}
+        </p>
+        <button type="button" class="button github" @click="githubLogin('read')">
+          ◉ {{ t("githubRead") }}
+        </button>
+        <p class="permission-card">
+          <strong>{{ t("readTitle") }}</strong
+          ><br />{{ t("readText") }}
+        </p>
         <p class="note">{{ t("noWriteScope") }}</p>
       </div>
       <p v-if="oauthError" class="form-error">{{ t("oauthError", { error: oauthError }) }}</p>

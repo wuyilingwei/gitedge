@@ -4,6 +4,7 @@ import DashboardView from "./pages/DashboardView.vue";
 import RepositoryView from "./pages/RepositoryView.vue";
 import OrganizationsView from "./pages/OrganizationsView.vue";
 import OrganizationView from "./pages/OrganizationView.vue";
+import AccountSettingsView from "./pages/AccountSettingsView.vue";
 import { refreshSession, sessionState } from "./lib/session";
 
 export const router = createRouter({
@@ -15,6 +16,7 @@ export const router = createRouter({
     { path: "/dashboard", component: DashboardView },
     { path: "/organizations", component: OrganizationsView },
     { path: "/organizations/:slug", component: OrganizationView },
+    { path: "/settings/account", component: AccountSettingsView },
     {
       path: "/:owner/:repo/:section(code|issues|pulls|wiki|settings)?",
       component: RepositoryView,

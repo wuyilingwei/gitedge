@@ -30,7 +30,15 @@ refreshSession();
       <nav v-if="sessionState.user" class="top-actions">
         <RouterLink to="/dashboard">{{ t("dashboard") }}</RouterLink
         ><RouterLink to="/organizations">{{ t("organizations") }}</RouterLink
-        ><span v-if="sessionState.user.externalIdentity" class="account-summary"><img v-if="sessionState.user.externalIdentity.avatarUrl" :src="sessionState.user.externalIdentity.avatarUrl" alt="" />{{ sessionState.user.externalIdentity.login }}</span
+        ><RouterLink
+          v-if="sessionState.user.externalIdentity"
+          class="account-summary"
+          to="/settings/account"
+          ><img
+            v-if="sessionState.user.externalIdentity.avatarUrl"
+            :src="sessionState.user.externalIdentity.avatarUrl"
+            alt=""
+          />{{ sessionState.user.externalIdentity.login }}</RouterLink
         ><button class="text-button" @click="toggleLocale">
           {{ locale === "zh-CN" ? "EN" : "中文" }}</button
         ><button class="text-button" @click="signOut">{{ t("signOut") }}</button>
