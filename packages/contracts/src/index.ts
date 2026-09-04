@@ -143,7 +143,25 @@ export const RegisterInputSchema = z.object({
 
 export const LoginInputSchema = RegisterInputSchema;
 
+export const NamespaceSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9][a-z0-9-]{0,62}$/);
+
+export const CreateOrganizationInputSchema = z.object({
+  slug: NamespaceSlugSchema,
+  displayName: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).default(""),
+});
+
+export const AddOrganizationMemberInputSchema = z.object({
+  identifier: z.string().trim().min(3).max(64),
+  role: z.enum(["owner", "member"]).default("member"),
+});
+
 export const CreateRepositoryInputSchema = z.object({
+  owner: NamespaceSlugSchema,
   slug: z
     .string()
     .trim()

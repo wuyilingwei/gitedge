@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import forgeWorker from "../../workers/forge/src/index";
 import {
+  AddOrganizationMemberInputSchema,
+  CreateOrganizationInputSchema,
   CreateRepositoryInputSchema,
   LoginInputSchema,
   PutWikiPageInputSchema,
@@ -45,11 +47,34 @@ class FakeDatabase implements D1Database {
   }
 }
 
+type TestNamespace = {
+  id: string;
+  slug: string;
+  kind: "personal" | "organization";
+  display_name: string;
+  description: string;
+  created_by: string;
+  created_at: number;
+  role: "owner" | "member";
+};
+
+const personalTestNamespace: TestNamespace = {
+  id: "namespace-1",
+  slug: "rosmontis",
+  kind: "personal",
+  display_name: "",
+  description: "",
+  created_by: "user-1",
+  created_at: 1,
+  role: "owner",
+};
+
 class RepositoryCreateStatement implements D1PreparedStatement {
   constructor(
     private readonly query: string,
     private readonly deletedRepositories: string[],
-    private readonly repositoryCount: number
+    private readonly repositoryCount: number,
+    private readonly namespace: TestNamespace
   ) {}
 
   bind(...values: unknown[]): D1PreparedStatement {
@@ -63,11 +88,8 @@ class RepositoryCreateStatement implements D1PreparedStatement {
     if (this.query.includes("COUNT(*) AS count")) {
       return Promise.resolve({ count: this.repositoryCount } as T);
     }
-    if (this.query.includes("SELECT id FROM namespaces")) {
-      return Promise.resolve({ id: "namespace-1" } as T);
-    }
-    if (this.query.includes("SELECT slug FROM namespaces")) {
-      return Promise.resolve({ slug: "rosmontis" } as T);
+    if (this.query.includes("FROM namespaces LEFT JOIN namespace_memberships")) {
+      return Promise.resolve(this.namespace as T);
     }
     return Promise.resolve(null);
   }
@@ -87,10 +109,18 @@ class RepositoryCreateStatement implements D1PreparedStatement {
 class RepositoryCreateDatabase implements D1Database {
   readonly deletedRepositories: string[] = [];
 
-  constructor(private readonly repositoryCount = 0) {}
+  constructor(
+    private readonly repositoryCount = 0,
+    private readonly namespace: TestNamespace = personalTestNamespace
+  ) {}
 
   prepare(query: string): D1PreparedStatement {
-    return new RepositoryCreateStatement(query, this.deletedRepositories, this.repositoryCount);
+    return new RepositoryCreateStatement(
+      query,
+      this.deletedRepositories,
+      this.repositoryCount,
+      this.namespace
+    );
   }
 
   batch(_statements: readonly D1PreparedStatement[]): Promise<readonly D1Result[]> {
@@ -140,13 +170,72 @@ class PublicReadDatabase implements D1Database {
   }
 }
 
+class OrganizationStatement implements D1PreparedStatement {
+  constructor(private readonly query: string) {}
+
+  bind(..._values: unknown[]): D1PreparedStatement {
+    return this;
+  }
+
+  first<T = unknown>(): Promise<T | null> {
+    if (this.query.includes("FROM namespaces LEFT JOIN namespace_memberships")) {
+      return Promise.resolve({
+        id: "organization-1",
+        slug: "edge-team",
+        kind: "organization",
+        display_name: "Edge Team",
+        description: "Builds at the edge",
+        created_by: "user-1",
+        created_at: 1,
+        role: "owner",
+      } as T);
+    }
+    return Promise.resolve(null);
+  }
+
+  all<T = unknown>(): Promise<D1Result<T>> {
+    if (this.query.includes("SELECT users.identifier")) {
+      return Promise.resolve({
+        results: [{ identifier: "member", role: "member", createdAt: 2 }] as T[],
+        meta: { changes: 0 },
+      });
+    }
+    return Promise.resolve({ results: [], meta: { changes: 0 } });
+  }
+
+  run(): Promise<D1Result> {
+    return Promise.resolve({ results: [], meta: { changes: 1 } });
+  }
+}
+
+class OrganizationDatabase implements D1Database {
+  batches: readonly D1PreparedStatement[][] = [];
+
+  prepare(query: string): D1PreparedStatement {
+    return new OrganizationStatement(query);
+  }
+
+  batch(statements: readonly D1PreparedStatement[]): Promise<readonly D1Result[]> {
+    this.batches = [...this.batches, [...statements]];
+    return Promise.resolve([]);
+  }
+}
+
 describe("service contracts", () => {
   it("normalizes repository slugs and rejects unsafe names", () => {
     expect(
-      CreateRepositoryInputSchema.parse({ slug: "Code-Review", visibility: "private" }).slug
+      CreateRepositoryInputSchema.parse({
+        owner: "Rosmontis",
+        slug: "Code-Review",
+        visibility: "private",
+      }).slug
     ).toBe("code-review");
     expect(
-      CreateRepositoryInputSchema.safeParse({ slug: "../private", visibility: "private" }).success
+      CreateRepositoryInputSchema.safeParse({
+        owner: "rosmontis",
+        slug: "../private",
+        visibility: "private",
+      }).success
     ).toBe(false);
   });
 
@@ -157,6 +246,23 @@ describe("service contracts", () => {
     expect(
       PutWikiPageInputSchema.safeParse({ title: "Home", content: "x".repeat(100_001) }).success
     ).toBe(false);
+  });
+
+  it("requires an explicit repository owner and validates organization payloads", () => {
+    expect(
+      CreateRepositoryInputSchema.safeParse({ slug: "edge", visibility: "private" }).success
+    ).toBe(false);
+    expect(
+      CreateOrganizationInputSchema.parse({ slug: "Edge-Team", displayName: "Edge Team" })
+    ).toEqual({
+      slug: "edge-team",
+      displayName: "Edge Team",
+      description: "",
+    });
+    expect(AddOrganizationMemberInputSchema.parse({ identifier: "member" })).toEqual({
+      identifier: "member",
+      role: "member",
+    });
   });
 
   it("accepts only Gateway's trusted-user headers and returns frontend repository fields", async () => {
@@ -242,7 +348,7 @@ describe("service contracts", () => {
           "X-GitEdge-User-Name": "rosmontis",
           "X-GitEdge-User-Group": "free",
         },
-        body: JSON.stringify({ slug: "../escape", visibility: "private" }),
+        body: JSON.stringify({ owner: "rosmontis", slug: "../escape", visibility: "private" }),
       }),
       env
     );
@@ -274,7 +380,12 @@ describe("service contracts", () => {
           "X-GitEdge-User-Name": "rosmontis",
           "X-GitEdge-User-Group": "free",
         },
-        body: JSON.stringify({ slug: "edge", visibility: "public", description: "" }),
+        body: JSON.stringify({
+          owner: "rosmontis",
+          slug: "edge",
+          visibility: "public",
+          description: "",
+        }),
       }),
       env
     );
@@ -299,7 +410,12 @@ describe("service contracts", () => {
           "X-GitEdge-User-Name": "rosmontis",
           "X-GitEdge-User-Group": "free",
         },
-        body: JSON.stringify({ slug: "blocked", visibility: "public", description: "" }),
+        body: JSON.stringify({
+          owner: "rosmontis",
+          slug: "blocked",
+          visibility: "public",
+          description: "",
+        }),
       }),
       {
         DB: new RepositoryCreateDatabase(10),
@@ -312,5 +428,84 @@ describe("service contracts", () => {
     await expect(response.json()).resolves.toEqual({
       error: { code: "forbidden", message: "Repository limit reached for this user group." },
     });
+  });
+
+  it("allows an organization owner to create a repository under that organization", async () => {
+    const database = new RepositoryCreateDatabase(0, {
+      id: "organization-1",
+      slug: "edge-team",
+      kind: "organization",
+      display_name: "Edge Team",
+      description: "",
+      created_by: "other-user",
+      created_at: 1,
+      role: "owner",
+    });
+    const writes: Array<{ key: string; value: string }> = [];
+    const response = await forgeWorker.fetch(
+      new Request("https://forge.internal/repositories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-GitEdge-User-Id": "user-1",
+          "X-GitEdge-User-Name": "rosmontis",
+          "X-GitEdge-User-Group": "free",
+        },
+        body: JSON.stringify({ owner: "edge-team", slug: "docs", visibility: "private" }),
+      }),
+      {
+        DB: database,
+        LOG_LEVEL: "error",
+        ROUTES: { put: async (key: string, value: string) => void writes.push({ key, value }) },
+      }
+    );
+
+    expect(response.status).toBe(201);
+    expect(writes[0]?.key).toBe("repo-route:v1:edge-team/docs");
+  });
+
+  it("creates organizations atomically and lets owners list and add members", async () => {
+    const database = new OrganizationDatabase();
+    const env = { DB: database, LOG_LEVEL: "error", ROUTES: { put: async () => {} } };
+    const headers = {
+      "Content-Type": "application/json",
+      "X-GitEdge-User-Id": "user-1",
+      "X-GitEdge-User-Name": "rosmontis",
+      "X-GitEdge-User-Group": "free",
+    };
+
+    const created = await forgeWorker.fetch(
+      new Request("https://forge.internal/organizations", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          slug: "edge-team",
+          displayName: "Edge Team",
+          description: "Builds",
+        }),
+      }),
+      env
+    );
+    const members = await forgeWorker.fetch(
+      new Request("https://forge.internal/organizations/edge-team/members", { headers }),
+      env
+    );
+    const added = await forgeWorker.fetch(
+      new Request("https://forge.internal/organizations/edge-team/members", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ identifier: "member" }),
+      }),
+      env
+    );
+
+    expect(created.status).toBe(201);
+    expect(database.batches).toHaveLength(1);
+    expect(database.batches[0]).toHaveLength(2);
+    expect(members.status).toBe(200);
+    await expect(members.json()).resolves.toEqual({
+      data: [{ identifier: "member", role: "member", createdAt: 2 }],
+    });
+    expect(added.status).toBe(201);
   });
 });
