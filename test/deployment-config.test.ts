@@ -118,6 +118,12 @@ describe("production deployment configuration", () => {
     expect(readdirSync(new URL("../migrations/", import.meta.url))).toContain(
       "0002_user_groups.sql"
     );
+    expect(readdirSync(new URL("../migrations/", import.meta.url))).toContain(
+      "0003_external_identities.sql"
+    );
+    expect(readdirSync(new URL("../migrations/", import.meta.url))).toContain(
+      "0004_organizations.sql"
+    );
   });
 
   it("keeps signup, group quotas, and the strict IP limiter explicit", () => {
@@ -125,6 +131,7 @@ describe("production deployment configuration", () => {
       ALLOW_PUBLIC_SIGNUP: "true",
       DEFAULT_USER_GROUP: "free",
     });
+    expect(configs.auth.vars).not.toHaveProperty("GITHUB_CLIENT_SECRET");
     const groupLimitsJson = configs.gateway.vars?.USER_GROUP_LIMITS_JSON;
     expect(groupLimitsJson).toBeTruthy();
     expect(configs.forge.vars?.USER_GROUP_LIMITS_JSON).toBe(groupLimitsJson);

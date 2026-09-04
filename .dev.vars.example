@@ -23,3 +23,9 @@ TESSERA_OIDC_ISSUER=http://localhost:5174
 # never commit a real production value to wrangler.jsonc.vars.
 TESSERA_OIDC_CLIENT_ID=local-goc
 TESSERA_OIDC_CLIENT_SECRET=local-goc-dev-secret-change-me
+
+# GitHub OAuth App values for the GitEdge Auth Worker. Configure the local app
+# callback as http://localhost:8877/api/auth/github/callback. Production values
+# must be stored with `wrangler secret put` and never committed.
+GITHUB_CLIENT_ID=replace-with-local-oauth-client-id
+GITHUB_CLIENT_SECRET=replace-with-local-oauth-client-secret

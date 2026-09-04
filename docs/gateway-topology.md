@@ -4,15 +4,17 @@
 
 ## 路由边界
 
-| 请求                  | Gateway 行为                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------- |
-| `/api/auth/*`         | 去掉 `/api/auth` 前缀后转发到 Auth Worker                                                         |
-| `/api/forge/*`        | 先调用 Auth `/session`，成功后移除客户端伪造的可信头和 Cookie，注入 ID/Name，再去掉前缀转发 Forge |
-| `/:owner/:repo.git/*` | 原请求流式转发到 Git Worker                                                                       |
-| 其他 `GET`/`HEAD`     | 读取 Vue Static Assets；资源 404 时返回 `/index.html`                                             |
-| 其他方法              | 404                                                                                               |
+| 请求                  | Gateway 行为                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `/api/auth/*`         | 保留公网 origin 与查询参数，去掉 `/api/auth` 前缀后转发到 Auth Worker；GitHub callback 仍回到该公网前缀 |
+| `/api/forge/*`        | 先调用 Auth `/session`，成功后移除客户端伪造的可信头和 Cookie，注入 ID/Name，再去掉前缀转发 Forge       |
+| `/:owner/:repo.git/*` | 原请求流式转发到 Git Worker                                                                             |
+| 其他 `GET`/`HEAD`     | 读取 Vue Static Assets；资源 404 时返回 `/index.html`                                                   |
+| 其他方法              | 404                                                                                                     |
 
-Auth 的 `/session` 成功响应契约为 `{ "data": { "id": "...", "identifier": "..." } }`，未登录返回 401。该路径只通过 Service Binding 调用，不应添加公开路由。
+Auth 的 `/session` 成功响应至少包含 `{ "data": { "id": "...", "identifier": "...", "groupKey": "..." } }`；GitHub 登录用户还会得到不含 token 的 `externalIdentity` 摘要。未登录返回 401。Gateway 内部身份检查通过 Service Binding 调用该路径，浏览器也可经 `/api/auth/session` 读取自己的会话。
+
+GitHub OAuth App 的 callback URL 必须配置为 `https://<Gateway 域名>/api/auth/github/callback`。`/api/auth/github/start` 使用 state 与 PKCE；Auth 只保存经过验证的 GitHub 身份、邮箱和组织摘要，不保存 provider access token。
 
 ## 部署
 

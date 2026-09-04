@@ -42,6 +42,26 @@ describe("Gateway routing", () => {
     expect(await response.text()).toBe("/session");
   });
 
+  it("preserves the public origin and query while forwarding GitHub OAuth routes", async () => {
+    let receivedUrl = "";
+    const response = await handleGatewayRequest(
+      new Request(
+        "https://gitedge.example.com/api/auth/github/start?access=read&returnTo=%2Fsettings%2Faccount"
+      ),
+      environment({
+        auth: service((request) => {
+          receivedUrl = request.url;
+          return Response.redirect("https://github.com/login/oauth/authorize", 302);
+        }),
+      })
+    );
+
+    expect(response.status).toBe(302);
+    expect(receivedUrl).toBe(
+      "https://gitedge.example.com/github/start?access=read&returnTo=%2Fsettings%2Faccount"
+    );
+  });
+
   it("forwards anonymous Forge GET routes while rejecting writes", async () => {
     const response = await handleGatewayRequest(
       new Request("https://gitedge.example.com/api/forge/repositories"),

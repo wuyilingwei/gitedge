@@ -607,6 +607,7 @@ export async function startGithubOAuth(request: Request, env: AuthEnv): Promise<
   const state = createToken();
   const verifier = createPkceVerifier();
   const now = Date.now();
+  await env.DB.prepare("DELETE FROM github_oauth_states WHERE expires_at <= ?").bind(now).run();
   await env.DB.prepare(
     "INSERT INTO github_oauth_states (state_hash, code_verifier, access_level, return_to, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)"
   )

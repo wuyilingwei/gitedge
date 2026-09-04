@@ -31,4 +31,6 @@
 - Pull Request 支持创建、列表和状态更新 API，但不声称已有 diff 或 merge。
 - Wiki 使用 D1 保存正文与 revision，不建立第二套 Git 仓库。
 - Git Smart HTTP v2 核心保留；公开 fetch 路径可用，push 需要后续接通 PAT 签发与管理界面。
-- CI、组织级权限、SSH、代码评审线程和通知不在首批范围。
+- 组织提供 owner/member 基础成员语义和组织仓库归属；团队、细粒度仓库角色与邀请流程不在当前范围。
+- 外部登录首个 provider 为 GitHub OAuth，提供仅身份识别与账户资料只读两档，不请求 GitHub 仓库 scope。
+- CI、SSH、代码评审线程和通知不在当前范围。

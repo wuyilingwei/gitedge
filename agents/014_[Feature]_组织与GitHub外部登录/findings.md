@@ -17,3 +17,6 @@
 - [一次性状态] D1 的 `DELETE ... RETURNING` 以 state hash 和过期时间作为单条原子条件，成功后才允许交换 code，因此重放和过期 state 都无法继续使用。
 - [Gateway 回调] Auth Service 看到的是内部 `/github/*` 路径，但 OAuth redirect URI 必须回到 Gateway 暴露的同源 `/api/auth/github/callback`，否则 callback 不会重新进入 Auth 路由。
 - [外部身份摘要] OAuth token 只用于当前 API 验证；将经过验证的 login、profile、邮箱和组织快照存入外部身份行，并对 session 中可能损坏的历史 JSON 采取忽略而非抛错的处理。
+- [集成复审] 初版 callback URI 指向公网根 `/github/callback`，无法经过 Gateway 回到 Auth；初版组织响应也缺少 role 且成员列表误设为 owner-only -> 已分别改为同源 `/api/auth/github/callback`、响应当前 membership role，并允许普通成员只读成员列表。
+- [授权语义] GitHub OAuth App 的 `repo` scope 不能表达只读源码访问 -> UI 和文档明确两档均不请求任何仓库权限；“读取”严格限定为账户资料、已验证邮箱与组织列表。
+- [格式基线] 全仓 `npm run format:check` 仍报告 12 个本次未触及的存量文件 -> 本次涉及且 Prettier 支持的文件已用定向 `prettier --check` 全部验证通过，未格式化无关文件。

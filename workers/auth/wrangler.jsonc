@@ -8,8 +8,7 @@
   "workers_dev": false,
   "vars": {
     "ALLOW_PUBLIC_SIGNUP": "true",
-    "DEFAULT_USER_GROUP": "free",
-    "GITHUB_CLIENT_ID": "set-with-wrangler-secret-or-vars"
+    "DEFAULT_USER_GROUP": "free"
   },
   "d1_databases": [{
     "binding": "DB",

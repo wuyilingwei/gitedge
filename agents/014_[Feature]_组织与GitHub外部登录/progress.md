@@ -23,3 +23,9 @@
 - 2026-09-03：审查 staged Auth OAuth diff；确认仅包含 Auth Worker、其配置、根 D1 migration、目标测试和 task 014 审计记录，且无任务编号、模型署名或敏感 token/secret 值。
 - 2026-09-03：根据整合审查修正 Gateway 公网 callback URI，持久化并返回 GitHub 外部身份摘要，使用显式 password_auth_enabled 禁用 OAuth 用户的密码认证；定向 OAuth 测试扩展至 7 个用例。
 - 2026-09-03：将 OAuth 测试替身改为直接实现 D1Database 与 D1PreparedStatement 最小接口，移除双重类型断言和不可达返回；Auth typecheck 与 7 个定向测试再次通过。
+- 2026-09-03：依次合并组织、Vue、Auth 分支到本地 `main`，人工整合 `/agents` 审计冲突；工作代码无交叉冲突。
+- 2026-09-03：补充 Gateway OAuth 路由查询参数/公网 origin 回归、migration/config 断言、GitHub secret/部署说明与产品边界文档；移除 config 中不可用 client id 占位值。
+- 2026-09-03：全量 unit 23 文件/104 测试通过；全量 Worker 54 文件/323 测试通过；D1 定向 3 文件/33 测试通过；Vue 9 测试与生产构建通过；跨服务 typecheck 与五 Worker deploy dry-run 通过。
+- 2026-09-03：在全新临时 D1 上顺序应用 0001-0004，全部 migration 成功，并确认外部身份/state 表、个人 namespace owner trigger 及目标列存在；临时目录已移入废纸篓。
+- 2026-09-03：通过本地浏览器检查中英文登录页、两档 GitHub 权限文案和实际视觉布局；浏览器控制台无 error/warning。
+- 2026-09-03：增加 abandoned OAuth state 的过期行机会式清理，并将 UI 权限文案收紧为“不请求任何仓库权限”。

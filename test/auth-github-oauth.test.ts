@@ -12,6 +12,7 @@ type OAuthState = {
 class TestDatabase implements D1Database {
   readonly states = new Map<string, OAuthState>();
   readonly sessions = new Map<string, string>();
+  expiredStateCleanupCount = 0;
   sessionRow?: Record<string, unknown>;
   passwordUser?: Record<string, unknown>;
   externalIdentityValues?: readonly unknown[];
@@ -56,6 +57,9 @@ class TestStatement implements D1PreparedStatement {
     return { results: [], meta: { changes: 0 } };
   }
   async run(): Promise<D1Result> {
+    if (this.query.startsWith("DELETE FROM github_oauth_states WHERE expires_at")) {
+      this.database.expiredStateCleanupCount += 1;
+    }
     if (this.query.startsWith("INSERT INTO github_oauth_states")) {
       const access = this.values[2] === "read" ? "read" : "identity";
       this.database.states.set(String(this.values[0]), {
@@ -104,6 +108,7 @@ describe("GitHub OAuth", () => {
     expect(location.searchParams.get("redirect_uri")).toBe(
       "https://forge.example/api/auth/github/callback"
     );
+    expect(database.expiredStateCleanupCount).toBe(1);
     expect(database.states.size).toBe(1);
   });
 
