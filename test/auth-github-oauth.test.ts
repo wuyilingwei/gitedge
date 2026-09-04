@@ -9,74 +9,71 @@ type OAuthState = {
   expires_at: number;
 };
 
-type TestDatabase = {
-  states: Map<string, OAuthState>;
-  sessions: Map<string, string>;
+class TestDatabase implements D1Database {
+  readonly states = new Map<string, OAuthState>();
+  readonly sessions = new Map<string, string>();
   sessionRow?: Record<string, unknown>;
   passwordUser?: Record<string, unknown>;
   externalIdentityValues?: readonly unknown[];
-  prepare(sql: string): unknown;
-  batch(): Promise<unknown[]>;
-};
+  prepare(query: string): D1PreparedStatement {
+    return new TestStatement(query, this);
+  }
+  async batch(_statements: readonly D1PreparedStatement[]): Promise<readonly D1Result[]> {
+    return [];
+  }
+}
 
-function createDatabase(): TestDatabase {
-  const states = new Map<string, OAuthState>();
-  const sessions = new Map<string, string>();
-  let database: TestDatabase;
-  database = {
-    states,
-    sessions,
-    prepare(sql: string) {
+class TestStatement implements D1PreparedStatement {
+  private values: readonly unknown[] = [];
+  constructor(
+    private readonly query: string,
+    private readonly database: TestDatabase
+  ) {}
+  bind(...values: unknown[]): D1PreparedStatement {
+    this.values = values;
+    if (this.query.startsWith("INSERT INTO external_identities"))
+      this.database.externalIdentityValues = values;
+    return this;
+  }
+  async first<T = unknown>(): Promise<T | null> {
+    if (this.query.startsWith("DELETE FROM github_oauth_states")) {
+      const state = this.database.states.get(String(this.values[0]));
+      this.database.states.delete(String(this.values[0]));
+      if (!state || state.expires_at <= Number(this.values[1])) return null;
       return {
-        bind(...values: unknown[]) {
-          if (sql.startsWith("INSERT INTO external_identities"))
-            database.externalIdentityValues = values;
-          return {
-            async first<T>() {
-              if (sql.startsWith("DELETE FROM github_oauth_states")) {
-                const stateHash = String(values[0]);
-                const state = states.get(stateHash);
-                states.delete(stateHash);
-                if (!state || state.expires_at <= Number(values[1])) return null;
-                return {
-                  code_verifier: state.code_verifier,
-                  access_level: state.access_level,
-                  return_to: state.return_to,
-                } as T;
-              }
-              if (sql.startsWith("SELECT users.id, users.identifier, users.group_key, external"))
-                return database.sessionRow as T;
-              if (sql.startsWith("SELECT id, identifier, group_key, password_salt"))
-                return database.passwordUser as T;
-              return null;
-            },
-            async run() {
-              if (sql.startsWith("INSERT INTO github_oauth_states")) {
-                states.set(String(values[0]), {
-                  code_verifier: String(values[1]),
-                  access_level: values[2] as "identity" | "read",
-                  return_to: String(values[3]),
-                  expires_at: Number(values[4]),
-                });
-              }
-              if (sql.startsWith("INSERT INTO auth_sessions"))
-                sessions.set(String(values[0]), String(values[1]));
-              return {};
-            },
-          };
-        },
-      };
-    },
-    async batch() {
-      return [];
-    },
-  };
-  return database;
+        code_verifier: state.code_verifier,
+        access_level: state.access_level,
+        return_to: state.return_to,
+      } as T;
+    }
+    if (this.query.startsWith("SELECT users.id, users.identifier, users.group_key, external"))
+      return (this.database.sessionRow ?? null) as T | null;
+    if (this.query.startsWith("SELECT id, identifier, group_key, password_salt"))
+      return (this.database.passwordUser ?? null) as T | null;
+    return null;
+  }
+  async all<T = unknown>(): Promise<D1Result<T>> {
+    return { results: [], meta: { changes: 0 } };
+  }
+  async run(): Promise<D1Result> {
+    if (this.query.startsWith("INSERT INTO github_oauth_states")) {
+      const access = this.values[2] === "read" ? "read" : "identity";
+      this.database.states.set(String(this.values[0]), {
+        code_verifier: String(this.values[1]),
+        access_level: access,
+        return_to: String(this.values[3]),
+        expires_at: Number(this.values[4]),
+      });
+    }
+    if (this.query.startsWith("INSERT INTO auth_sessions"))
+      this.database.sessions.set(String(this.values[0]), String(this.values[1]));
+    return { results: [], meta: { changes: 0 } };
+  }
 }
 
 function testEnv(database: TestDatabase) {
   return {
-    DB: database as unknown as D1Database,
+    DB: database,
     ALLOW_PUBLIC_SIGNUP: "true",
     DEFAULT_USER_GROUP: "free",
     GITHUB_CLIENT_ID: "github-test-client",
@@ -85,14 +82,13 @@ function testEnv(database: TestDatabase) {
     GITHUB_API_BASE: "https://api.github.example",
     LOG_LEVEL: "error",
   };
-  return database;
 }
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("GitHub OAuth", () => {
   it("starts identity OAuth with state and S256 PKCE but no requested scope", async () => {
-    const database = createDatabase();
+    const database = new TestDatabase();
     const response = await startGithubOAuth(
       new Request("https://forge.example/github/start?access=identity&returnTo=%2Faccount"),
       testEnv(database)
@@ -112,7 +108,7 @@ describe("GitHub OAuth", () => {
   });
 
   it("rejects an external return target before persisting OAuth state", async () => {
-    const database = createDatabase();
+    const database = new TestDatabase();
     const response = await startGithubOAuth(
       new Request(
         "https://forge.example/github/start?access=read&returnTo=https%3A%2F%2Fevil.example"
@@ -124,7 +120,7 @@ describe("GitHub OAuth", () => {
   });
 
   it("consumes state once, verifies the numeric user id, and establishes a session", async () => {
-    const database = createDatabase();
+    const database = new TestDatabase();
     const environment = testEnv(database);
     const started = await startGithubOAuth(
       new Request("https://forge.example/github/start?access=identity&returnTo=%2Faccount"),
@@ -174,7 +170,7 @@ describe("GitHub OAuth", () => {
   });
 
   it("rejects a read grant that includes a broader scope", async () => {
-    const database = createDatabase();
+    const database = new TestDatabase();
     const environment = testEnv(database);
     const started = await startGithubOAuth(
       new Request("https://forge.example/github/start?access=read&returnTo=%2Faccount"),
@@ -203,7 +199,7 @@ describe("GitHub OAuth", () => {
   });
 
   it("stores the verified read snapshot without retaining the OAuth token", async () => {
-    const database = createDatabase();
+    const database = new TestDatabase();
     const environment = testEnv(database);
     const started = await startGithubOAuth(
       new Request("https://forge.example/github/start?access=read&returnTo=%2Faccount"),
@@ -254,7 +250,7 @@ describe("GitHub OAuth", () => {
   });
 
   it("returns a defensive external identity summary from session data", async () => {
-    const database = createDatabase();
+    const database = new TestDatabase();
     database.sessionRow = {
       id: "user-1",
       identifier: "github-safe",
@@ -283,7 +279,7 @@ describe("GitHub OAuth", () => {
   });
 
   it("rejects password login before deriving a disabled external credential", async () => {
-    const database = createDatabase();
+    const database = new TestDatabase();
     database.passwordUser = {
       id: "user-1",
       identifier: "github-safe",
