@@ -1,6 +1,6 @@
 # GitEdge / 码锋 项目索引
 
-> 最后更新：2026-08-26
+> 最后更新：2026-09-03
 
 ## 项目目标
 
@@ -10,8 +10,8 @@ GitEdge（中文名“码锋”）是部署在 Cloudflare 边缘平台上的 Git
 
 - 前端：Vue 3、TypeScript、Vite、Vue Router、Vue I18n
 - 边缘入口：Cloudflare Workers Static Assets + Gateway Worker
-- 授权：独立 Auth Worker、D1 用户/会话、HttpOnly Cookie
-- Forge 协作：独立 Forge Worker、D1 元数据
+- 授权：独立 Auth Worker、D1 用户/会话/外部身份、密码与 GitHub OAuth、HttpOnly Cookie
+- Forge 协作：独立 Forge Worker、D1 个人/组织 namespace 与协作元数据
 - Git 传输：独立 Git Worker、每仓库 Durable Object、R2 对象
 - 元数据：Cloudflare D1
 - 仓库协调：Cloudflare Durable Objects（框架边界）
@@ -39,4 +39,4 @@ GitEdge（中文名“码锋”）是部署在 Cloudflare 边缘平台上的 Git
 
 生产站点为 `https://gitedge.wuyilingwei.com`，仅 Gateway 通过 Custom Domain 公开；Auth、Forge 与 Git Worker 关闭 `workers.dev`，只通过 Service Bindings 接入。生产资源为 D1 `gitedge`、KV `gitedge-routes`、R2 `gitedge-git-repos` 与 Queue `gitedge-git-repo-maint`。
 
-本轮交付的是已上线的多 Worker 产品框架、授权入口与仓库、Issue、Pull Request、Wiki 首批垂直切片。完整权限模型和 GC Container 不在本轮伪装为成品；Git transport 优先复用经验证的 MIT 上游实现，不从零重写协议。
+当前源码包含多 Worker 产品框架、密码与 GitHub 外部登录、个人/组织 namespace、仓库、Issue、Pull Request、Wiki 垂直切片。GitHub OAuth 提供身份识别与账户资料只读两档，不请求仓库权限；完整团队/仓库角色模型和 GC Container 不伪装为成品。Git transport 优先复用经验证的 MIT 上游实现，不从零重写协议。

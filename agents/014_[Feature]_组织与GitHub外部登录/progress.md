@@ -29,3 +29,4 @@
 - 2026-09-03：在全新临时 D1 上顺序应用 0001-0004，全部 migration 成功，并确认外部身份/state 表、个人 namespace owner trigger 及目标列存在；临时目录已移入废纸篓。
 - 2026-09-03：通过本地浏览器检查中英文登录页、两档 GitHub 权限文案和实际视觉布局；浏览器控制台无 error/warning。
 - 2026-09-03：增加 abandoned OAuth state 的过期行机会式清理，并将 UI 权限文案收紧为“不请求任何仓库权限”。
+- 2026-09-03：确认 `origin/main` 为 `https://github.com/wuyilingwei/gitedge.git`，GitHub API 返回 main 未受保护；验证远端 main 是本地 main 祖先后，将完整实现快进推送至 `origin/main`。
