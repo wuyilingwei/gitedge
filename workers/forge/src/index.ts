@@ -134,6 +134,7 @@ function organizationResponse(row: NamespaceAccessRow) {
     displayName: row.display_name,
     description: row.description,
     createdAt: row.created_at,
+    role: row.role,
   };
 }
 
@@ -278,9 +279,9 @@ export default {
       if (request.method === "GET" && parts.length === 2)
         return json({ data: organizationResponse(organization) });
       if (parts[2] === "members") {
-        if (!organizationOwner(organization))
-          return error(403, "forbidden", "Organization owner access is required.");
         if (request.method === "GET" && parts.length === 3) {
+          if (!organization.role)
+            return error(403, "forbidden", "Organization membership is required.");
           const rows = await env.DB.prepare(
             "SELECT users.identifier, namespace_memberships.role, namespace_memberships.created_at AS createdAt FROM namespace_memberships JOIN users ON users.id = namespace_memberships.user_id WHERE namespace_memberships.namespace_id = ? ORDER BY namespace_memberships.role DESC, users.identifier ASC"
           )
@@ -288,6 +289,8 @@ export default {
             .all<OrganizationMemberRow>();
           return json({ data: rows.results });
         }
+        if (!organizationOwner(organization))
+          return error(403, "forbidden", "Organization owner access is required.");
         if (request.method === "POST" && parts.length === 3) {
           const parsed = AddOrganizationMemberInputSchema.safeParse(await parseJson(request));
           if (!parsed.success)

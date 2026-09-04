@@ -6,3 +6,4 @@
 - [组织模型] -> [复用 namespaces 与 namespace_memberships] -> `0004_organizations.sql` 将 namespace 表达为 personal 或 organization，加入展示字段；membership 表达 owner 或 member。个人 namespace 的 owner 角色由 D1 trigger 在注册写入 membership 时维护。
 - [写入边界] -> [组织与首位 owner 需共同成功] -> Forge 以单次 D1 batch 写入 namespace 和 membership；成员删除通过带 owner 数量条件的单条 DELETE RETURNING，不能移除最后一名 owner。
 - [仓库创建] -> [旧契约隐式查找个人 namespace] -> 契约强制 owner slug，Forge 对个人 namespace 核验创建者，对组织核验 membership owner；不保留旧 fallback。
+- [组织成员读取] -> [owner-only guard 会阻止普通成员打开组织页面] -> 成员列表单独核验 membership；仅添加与移除成员继续要求 owner，组织响应返回当前用户 role 供客户端决定管理入口。

@@ -7,3 +7,4 @@
 - 2026-09-03：新增 `migrations/0004_organizations.sql`；Forge 实现组织列表、创建、读取、owner 成员增删与组织仓库创建授权，并添加结构化日志。
 - 2026-09-03：以临时只读依赖链接运行 `vitest run --config vitest.unit.config.ts test/services`（9 passed）及 `tsc --noEmit -p workers/forge/tsconfig.json`（passed）；链接已移除。
 - 2026-09-03：扩展组织 owner 创建仓库的服务契约覆盖；目标服务测试更新为 10 passed，并将变更提交到 `codex/014-orgs`。
+- 2026-09-03：组织响应加入当前用户 role；分离成员读取和成员管理授权，补充 member 可读不可写与最后 owner 删除保护的服务分支测试（12 passed），Forge 类型检查通过。

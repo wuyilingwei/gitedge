@@ -171,13 +171,23 @@ class PublicReadDatabase implements D1Database {
 }
 
 class OrganizationStatement implements D1PreparedStatement {
-  constructor(private readonly query: string) {}
+  constructor(
+    private readonly query: string,
+    private readonly role: "owner" | "member",
+    private readonly deleteOutcome: "last-owner" | "none"
+  ) {}
 
   bind(..._values: unknown[]): D1PreparedStatement {
     return this;
   }
 
   first<T = unknown>(): Promise<T | null> {
+    if (
+      this.query.startsWith("DELETE FROM namespace_memberships") &&
+      this.deleteOutcome === "last-owner"
+    ) {
+      return Promise.resolve(null);
+    }
     if (this.query.includes("FROM namespaces LEFT JOIN namespace_memberships")) {
       return Promise.resolve({
         id: "organization-1",
@@ -187,7 +197,7 @@ class OrganizationStatement implements D1PreparedStatement {
         description: "Builds at the edge",
         created_by: "user-1",
         created_at: 1,
-        role: "owner",
+        role: this.role,
       } as T);
     }
     return Promise.resolve(null);
@@ -211,8 +221,13 @@ class OrganizationStatement implements D1PreparedStatement {
 class OrganizationDatabase implements D1Database {
   batches: readonly D1PreparedStatement[][] = [];
 
+  constructor(
+    private readonly role: "owner" | "member" = "owner",
+    private readonly deleteOutcome: "last-owner" | "none" = "none"
+  ) {}
+
   prepare(query: string): D1PreparedStatement {
-    return new OrganizationStatement(query);
+    return new OrganizationStatement(query, this.role, this.deleteOutcome);
   }
 
   batch(statements: readonly D1PreparedStatement[]): Promise<readonly D1Result[]> {
@@ -507,5 +522,69 @@ describe("service contracts", () => {
       data: [{ identifier: "member", role: "member", createdAt: 2 }],
     });
     expect(added.status).toBe(201);
+  });
+
+  it("lets members read organization members but reserves member changes for owners", async () => {
+    const env = {
+      DB: new OrganizationDatabase("member"),
+      LOG_LEVEL: "error",
+      ROUTES: { put: async () => {} },
+    };
+    const headers = {
+      "Content-Type": "application/json",
+      "X-GitEdge-User-Id": "member-user",
+      "X-GitEdge-User-Name": "member",
+      "X-GitEdge-User-Group": "free",
+    };
+    const organization = await forgeWorker.fetch(
+      new Request("https://forge.internal/organizations/edge-team", { headers }),
+      env
+    );
+    const members = await forgeWorker.fetch(
+      new Request("https://forge.internal/organizations/edge-team/members", { headers }),
+      env
+    );
+    const write = await forgeWorker.fetch(
+      new Request("https://forge.internal/organizations/edge-team/members", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ identifier: "another-member" }),
+      }),
+      env
+    );
+
+    await expect(organization.json()).resolves.toMatchObject({ data: { role: "member" } });
+    expect(members.status).toBe(200);
+    expect(write.status).toBe(403);
+    await expect(write.json()).resolves.toEqual({
+      error: { code: "forbidden", message: "Organization owner access is required." },
+    });
+  });
+
+  it("does not delete the final organization owner", async () => {
+    const env = {
+      DB: new OrganizationDatabase("owner", "last-owner"),
+      LOG_LEVEL: "error",
+      ROUTES: { put: async () => {} },
+    };
+    const response = await forgeWorker.fetch(
+      new Request("https://forge.internal/organizations/edge-team/members/rosmontis", {
+        method: "DELETE",
+        headers: {
+          "X-GitEdge-User-Id": "user-1",
+          "X-GitEdge-User-Name": "rosmontis",
+          "X-GitEdge-User-Group": "free",
+        },
+      }),
+      env
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "conflict",
+        message: "Member was not found or is the last organization owner.",
+      },
+    });
   });
 });
