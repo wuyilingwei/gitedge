@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { api, type Repository } from "../lib/api";
+import { api, type Organization, type Repository } from "../lib/api";
+import { sessionState } from "../lib/session";
 import StatusState from "../components/StatusState.vue";
 
 const { t, locale } = useI18n();
@@ -12,6 +13,8 @@ const showForm = ref(false);
 const saving = ref(false);
 const formError = ref("");
 const form = ref({ name: "", description: "", visibility: "private" as "public" | "private" });
+const organizations = ref<Organization[]>([]);
+const owner = ref("");
 
 function formatUpdatedAt(value: number): string {
   return new Intl.DateTimeFormat(locale.value, { dateStyle: "medium" }).format(value);
@@ -22,6 +25,8 @@ async function load() {
   error.value = "";
   try {
     repos.value = await api.repositories();
+    organizations.value = await api.organizations();
+    owner.value = owner.value || sessionState.user?.identifier || "";
   } catch {
     error.value = t("apiError");
   } finally {
@@ -33,7 +38,7 @@ async function createRepository() {
   saving.value = true;
   formError.value = "";
   try {
-    await api.createRepository(form.value);
+    await api.createRepository({ ...form.value, owner: owner.value });
     form.value = { name: "", description: "", visibility: "private" };
     showForm.value = false;
     await load();
@@ -57,6 +62,21 @@ onMounted(load);
       <button class="button primary" @click="showForm = !showForm">+ {{ t("newRepo") }}</button>
     </div>
     <form v-if="showForm" class="panel create-form" @submit.prevent="createRepository">
+      <label
+        >{{ t("repositoryOwner")
+        }}<select v-model="owner" required>
+          <option :value="sessionState.user?.identifier">
+            {{ sessionState.user?.identifier }} ({{ t("personal") }})
+          </option>
+          <option
+            v-for="organization in organizations"
+            :key="organization.slug"
+            :value="organization.slug"
+          >
+            {{ organization.displayName }}
+          </option>
+        </select></label
+      >
       <label>{{ t("repositoryName") }}<input v-model="form.name" required /></label>
       <label>{{ t("description") }}<input v-model="form.description" /></label>
       <label

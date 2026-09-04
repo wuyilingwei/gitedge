@@ -10,3 +10,6 @@
 - [写入边界] -> [组织与首位 owner 需共同成功] -> Forge 以单次 D1 batch 写入 namespace 和 membership；成员删除通过带 owner 数量条件的单条 DELETE RETURNING，不能移除最后一名 owner。
 - [仓库创建] -> [旧契约隐式查找个人 namespace] -> 契约强制 owner slug，Forge 对个人 namespace 核验创建者，对组织核验 membership owner；不保留旧 fallback。
 - [组织成员读取] -> [owner-only guard 会阻止普通成员打开组织页面] -> 成员列表单独核验 membership；仅添加与移除成员继续要求 owner，组织响应返回当前用户 role 供客户端决定管理入口。
+- [前端契约] 现有 API client 统一解包 `{data}` envelope；组织与 GitHub 外部身份字段直接以严格接口表达，仓库创建请求显式携带 `owner`。
+- [验证] 初次测试因离线依赖未安装无法启动；执行离线 npm install 后，8 个 UI/API 测试和生产构建均通过。
+- [权限显示] 组织详情根据服务返回的 `organization.role` 控制成员添加表单；普通成员保留成员列表只读视图，提交错误不覆盖页面加载状态。
